@@ -1,0 +1,1 @@
+# Lemniscate-Polynomial-Data

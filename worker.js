@@ -1,7 +1,7 @@
-
 self.addEventListener('message', function(e) {
+
   const i = e.data.index;
-  const particles = new Float64Array(e.data.bufferToSend);
+  const particles = new Float32Array(e.data.bufferToSend);
 
   const n = particles.length/4;
   const h = e.data.h;

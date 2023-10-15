@@ -270,7 +270,7 @@ function reset() {
 }
 
 function particlesToArrayBuffer(particles) {
-    const arr = new Float64Array(particles.length * 4);
+    const arr = new Float32Array(particles.length * 4);
     for (let i = 0; i < n; i++) {
     	arr[i * 4] = particles[i][0];
         arr[i * 4 + 1] = particles[i][1];
@@ -284,10 +284,10 @@ function particlesToArrayBuffer(particles) {
 // Create a worker from an inline script using Blob
 const blob = new Blob([
   `
-
 self.addEventListener('message', function(e) {
+
   const i = e.data.index;
-  const particles = new Float64Array(e.data.bufferToSend);
+  const particles = new Float32Array(e.data.bufferToSend);
 
   const n = particles.length/4;
   const h = e.data.h;

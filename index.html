@@ -263,7 +263,7 @@ function reset() {
 	} else {
 		numberOfWorkers = 8;
 	}
-	numberOfWorkers = n < 100 ? 1 : 4;  // Number of workers
+	//numberOfWorkers = n < 100 ? 1 : 4;  // Number of workers
 	workerPool = Array.from({ length: numberOfWorkers }, () => new Worker(workerURL));
 
 	justReset = true;

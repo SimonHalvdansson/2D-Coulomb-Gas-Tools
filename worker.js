@@ -3,7 +3,7 @@ self.addEventListener('message', function(e) {
   const i = e.data.index;
   const particles = new Float32Array(e.data.bufferToSend);
 
-  const n = particles.length/4;
+  const n = particles.length/2;
   const h = e.data.h;
   const dt = e.data.dt;
   const pot = e.data.pot;
@@ -45,8 +45,8 @@ self.addEventListener('message', function(e) {
   }
 
   //first do the Q derivative numerically (as it is not O(n^2))
-  let acc_x = -n*(Q(particles[i*4+0]+h, particles[i*4+1]) - Q(particles[i*4+0], particles[i*4+1]))/h
-  let acc_y = -n*(Q(particles[i*4+0], particles[i*4+1]+h) - Q(particles[i*4+0], particles[i*4+1]))/h
+  let acc_x = -n*(Q(particles[i*2+0]+h, particles[i*2+1]) - Q(particles[i*2+0], particles[i*2+1]))/h
+  let acc_y = -n*(Q(particles[i*2+0], particles[i*2+1]+h) - Q(particles[i*2+0], particles[i*2+1]))/h
 
   /*
   now for the pairwise interaction, the force should be in the
@@ -57,10 +57,10 @@ self.addEventListener('message', function(e) {
   for (let j = 0; j < n; j++) {
     if (j != i) {
 
-      let px = particles[i*4+0]
-      let py = particles[i*4+1]
-      let qx = particles[j*4+0]
-      let qy = particles[j*4+1]
+      let px = particles[i*2+0]
+      let py = particles[i*2+1]
+      let qx = particles[j*2+0]
+      let qy = particles[j*2+1]
 
       //for now, let's just do numerical derivative
       let den = (px*px - 2*px*qx + qx*qx + py*py - 2*py*qy + qy*qy);

@@ -13,7 +13,7 @@
 			font-size: 20px;
 		}
 		
-		canvas {
+		#main-canvas {
 			border: 1px solid black;
 			float: left;
 			margin-right: 20px;
@@ -58,7 +58,10 @@
 <body>
 <div id="container">
 
-	<canvas width="900px" height = 900px></canvas>
+	<canvas id="main-canvas" width="900px" height = 900px></canvas>
+
+	<canvas id="webgl-canvas"></canvas>
+
 	<div id="controls">
 		<div class="panel">
 			<div>Jumps:</div>
@@ -154,8 +157,11 @@
 const rangejumps = document.getElementById("rangejumps");
 const rangedt = document.getElementById("rangedt");
 
-const canvas = document.querySelector('canvas')
+const canvas = document.querySelector('#main-canvas')
 const ctx = canvas.getContext('2d')
+
+const webgpCanvas = document.querySelector('#webgl-canvas')
+const gl = canvas.getContext('webgl2')
 
 const width = canvas.width
 const height = canvas.height
@@ -263,19 +269,16 @@ function reset() {
 	} else {
 		numberOfWorkers = 8;
 	}
-	//numberOfWorkers = n < 100 ? 1 : 4;  // Number of workers
 	workerPool = Array.from({ length: numberOfWorkers }, () => new Worker(workerURL));
 
 	justReset = true;
 }
 
-function particlesToArrayBuffer(particles) {
-    const arr = new Float32Array(particles.length * 4);
+function particlePositionsToArrayBuffer(particles) {
+    const arr = new Float32Array(particles.length * 2);
     for (let i = 0; i < n; i++) {
-    	arr[i * 4] = particles[i][0];
-        arr[i * 4 + 1] = particles[i][1];
-        arr[i * 4 + 2] = particles[i][2];
-        arr[i * 4 + 3] = particles[i][3];
+    	arr[i * 2] = particles[i][0];
+        arr[i * 2 + 1] = particles[i][1];
     }
 
     return arr.buffer;
@@ -289,7 +292,7 @@ self.addEventListener('message', function(e) {
   const i = e.data.index;
   const particles = new Float32Array(e.data.bufferToSend);
 
-  const n = particles.length/4;
+  const n = particles.length/2;
   const h = e.data.h;
   const dt = e.data.dt;
   const pot = e.data.pot;
@@ -331,8 +334,8 @@ self.addEventListener('message', function(e) {
   }
 
   //first do the Q derivative numerically (as it is not O(n^2))
-  let acc_x = -n*(Q(particles[i*4+0]+h, particles[i*4+1]) - Q(particles[i*4+0], particles[i*4+1]))/h
-  let acc_y = -n*(Q(particles[i*4+0], particles[i*4+1]+h) - Q(particles[i*4+0], particles[i*4+1]))/h
+  let acc_x = -n*(Q(particles[i*2+0]+h, particles[i*2+1]) - Q(particles[i*2+0], particles[i*2+1]))/h
+  let acc_y = -n*(Q(particles[i*2+0], particles[i*2+1]+h) - Q(particles[i*2+0], particles[i*2+1]))/h
 
   /*
   now for the pairwise interaction, the force should be in the
@@ -343,10 +346,10 @@ self.addEventListener('message', function(e) {
   for (let j = 0; j < n; j++) {
     if (j != i) {
 
-      let px = particles[i*4+0]
-      let py = particles[i*4+1]
-      let qx = particles[j*4+0]
-      let qy = particles[j*4+1]
+      let px = particles[i*2+0]
+      let py = particles[i*2+1]
+      let qx = particles[j*2+0]
+      let qy = particles[j*2+1]
 
       //for now, let's just do numerical derivative
       let den = (px*px - 2*px*qx + qx*qx + py*py - 2*py*qy + qy*qy);
@@ -367,20 +370,43 @@ const workerURL = URL.createObjectURL(blob);
 let numberOfWorkers = 4;  // Number of workers
 let workerPool = Array.from({ length: numberOfWorkers }, () => new Worker(workerURL));
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function step() {
     const accs = [];
+
+
+
+
+
+
+
+
+
 
     const tasks = Array.from({ length: n }, (_, index) => index);
     const chunkSize = Math.ceil(n / numberOfWorkers);
     const chunks = Array.from({ length: numberOfWorkers }, (_, i) => tasks.slice(i * chunkSize, (i + 1) * chunkSize));
-
 
 	let messageCounts = [];
 	for (let i = 0; i < numberOfWorkers; i++) {
 		messageCounts.push(0)
 	}
 
-	const bufferToSend = particlesToArrayBuffer(particles);
+	const bufferToSend = particlePositionsToArrayBuffer(particles);
 
     const promises = chunks.map((chunk, workerIndex) => {
         return new Promise((resolve) => {

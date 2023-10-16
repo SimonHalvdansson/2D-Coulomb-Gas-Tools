@@ -62,6 +62,13 @@
 	<canvas id="main-canvas" width="900px" height="900px"></canvas>
 
 	<div id="controls">
+
+		<div class="panel">
+			<div>GPU acceleration:</div>
+
+			<input type="checkbox" value="1" id="gpu-acc" onclick="updateGPUacc()">
+		</div>
+
 		<div class="panel">
 			<div>Jumps:</div>
 
@@ -163,7 +170,7 @@ const width = canvas.width
 const height = canvas.height
 
 const h = 0.0001
-let n = 50000;
+let n = 5000;
 
 let oldPot;
 let oldInt;
@@ -424,7 +431,7 @@ async function updateCPU() {
 		counter++;
 	}
 
-	draw()
+	drawCPU()
 
 	s = 0
 	particles.forEach(function(p) {
@@ -437,9 +444,16 @@ async function updateCPU() {
 	window.requestAnimationFrame(updateCPU)
 }
 
+function drawCPU() {
+	ctx.clearRect(0, 0, width, height)
 
+	ctx.fillStyle = '#000'
+	for (let i = 0; i < n; i++) {
+		ctx.fillRect(width/2 + (particles[i][0])*300, height/2 + (particles[i][1])*300, particleSize, particleSize)
+	}
+}
 
-async function draw(pos) {
+async function drawGPU(pos) {
 	let pars = await pos.toArray(); 
 
 	ctx.clearRect(0, 0, width, height)
@@ -451,18 +465,22 @@ async function draw(pos) {
 }
 
 reset()
-//window.requestAnimationFrame(updateCPU)
+window.requestAnimationFrame(updateCPU)
 
 
 
 
 
-
+function startGPU() {
+	start();
+}
 
 
 
 let start = async () => {
 	await ti.init();
+
+	n = 10000;
 
 	let pos = ti.field(ti.f32, n*2);
 	let vel = ti.field(ti.f32, n*2);
@@ -531,35 +549,17 @@ let start = async () => {
 			vel[i*2 + 0] *= 0.8;
 			vel[i*2 + 1] *= 0.8;
 		}
-		
-		//for (let i of ti.range(n)) {
-		//	pos[i*2 + 0] += vel[i*2 + 0];
-		//	pos[i*2 + 1] += vel[i*2 + 1];
-		//}
-		
-
+	
 	});
-
-	
-	
 
 	async function frame() {
 		substep()
-		await draw(pos);
+		await drawGPU(pos);
 		requestAnimationFrame(frame);
 	}
 
 	await frame();
 };
-
-
-start();
-
-
-
-
-
-
 
 </script>
 

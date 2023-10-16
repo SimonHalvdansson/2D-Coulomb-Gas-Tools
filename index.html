@@ -4,6 +4,8 @@
 	<meta charset="UTF-8">
 	<title>Sim</title>
 	
+	<script src="https://unpkg.com/taichi.js/dist/taichi.umd.js"></script>
+
 	<style type="text/css">
 
 		body {
@@ -20,7 +22,6 @@
 		}
 
 		#container {
-			float left;
 			width: 1300px;
 			margin: auto;
 		}
@@ -58,9 +59,7 @@
 <body>
 <div id="container">
 
-	<canvas id="main-canvas" width="900px" height = 900px></canvas>
-
-	<canvas id="webgl-canvas"></canvas>
+	<canvas id="main-canvas" width="900px" height="900px"></canvas>
 
 	<div id="controls">
 		<div class="panel">
@@ -160,14 +159,11 @@ const rangedt = document.getElementById("rangedt");
 const canvas = document.querySelector('#main-canvas')
 const ctx = canvas.getContext('2d')
 
-const webgpCanvas = document.querySelector('#webgl-canvas')
-const gl = canvas.getContext('webgl2')
-
 const width = canvas.width
 const height = canvas.height
 
-const h = 0.0000001
-let n = 1000;
+const h = 0.0001
+let n = 50000;
 
 let oldPot;
 let oldInt;
@@ -176,6 +172,7 @@ let newInt;
 
 let counter;
 let particles;
+let accs;
 let dt;
 
 let pot = 0;
@@ -251,14 +248,16 @@ function reset() {
 	counter = 0
 
 	particles = []
+	accs = []
 
 	steps = rangejumps.value
-	dt = rangedt.value / 3000
+	dt = rangedt.value / 1000
 
 	for (let i = 0; i < n; i++) {
 		x = (Math.random()-0.5)*2.7
 		y = (Math.random()-0.5)*2.7
 		particles.push([x, y, 0, 0])
+		accs.push([0,0])
 	}
 
 	// Initialize worker pool
@@ -370,32 +369,8 @@ const workerURL = URL.createObjectURL(blob);
 let numberOfWorkers = 4;  // Number of workers
 let workerPool = Array.from({ length: numberOfWorkers }, () => new Worker(workerURL));
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async function step() {
     const accs = [];
-
-
-
-
-
-
-
-
-
 
     const tasks = Array.from({ length: n }, (_, index) => index);
     const chunkSize = Math.ceil(n / numberOfWorkers);
@@ -443,7 +418,7 @@ async function step() {
 	}
 }
 
-async function update() {
+async function updateCPU() {
 	for (let i = 0; i < steps; i++) {
 		await step()
 		counter++;
@@ -459,22 +434,132 @@ async function update() {
 	document.getElementById('speed').innerHTML = s/n;
 	document.getElementById('counter').innerHTML = counter;
 
-	window.requestAnimationFrame(update)
+	window.requestAnimationFrame(updateCPU)
 }
 
 
 
-function draw() {
+async function draw(pos) {
+	let pars = await pos.toArray(); 
+
 	ctx.clearRect(0, 0, width, height)
 
 	ctx.fillStyle = '#000'
-	particles.forEach(function(p) {
-		ctx.fillRect(width/2 + (p[0])*300, height/2 + (p[1])*300, particleSize, particleSize)
-	});
+	for (let i = 0; i < n; i++) {
+		ctx.fillRect(width/2 + (pars[i*2+0])*300, height/2 + (pars[i*2+1])*300, particleSize, particleSize)
+	}
 }
 
 reset()
-window.requestAnimationFrame(update)
+//window.requestAnimationFrame(updateCPU)
+
+
+
+
+
+
+
+
+
+let start = async () => {
+	await ti.init();
+
+	let pos = ti.field(ti.f32, n*2);
+	let vel = ti.field(ti.f32, n*2);
+	let acc = ti.field(ti.f32, n*2);
+
+	function Q(x, y) {
+		return x*x + y*y;
+	}
+
+	ti.addToKernelScope({
+		n,
+		pos,
+		vel,
+		acc,
+		Q,
+		dt,
+		h
+	});
+
+	let init = ti.kernel(() => {
+		for (let i of ti.ndrange(n)) {
+			pos[i*2 + 0] = (ti.random()-0.5) * 2.7;
+			pos[i*2 + 1] = (ti.random()-0.5) * 2.7;
+
+			vel[i*2 + 0] = 0;
+			vel[i*2 + 1] = 0;
+
+			acc[i*2 + 0] = 0;
+			acc[i*2 + 1] = 0;
+		}
+	});
+
+	await init()
+
+	let substep = ti.kernel(() => {
+
+		for (let i of ti.range(n)) {
+			//first do the Q derivative numerically (as it is not O(n^2)), this is only 3 Q evaluations
+  			let num = Q(pos[i*2+0], pos[i*2+1]);
+			acc[i*2 + 0] = -n*(Q(pos[i*2+0]+h, pos[i*2+1]) - num)/h
+  			acc[i*2 + 1] = -n*(Q(pos[i*2+0], pos[i*2+1]+h) - num)/h	
+			
+			//new compute repulsion from everyone else
+			for (let j of ti.range(n)) {
+				if (j != i) {
+					let px = pos[i*2 + 0]
+					let py = pos[i*2 + 1]
+					let qx = pos[j*2 + 0]
+					let qy = pos[j*2 + 1]
+
+					let den = (px*px - 2*px*qx + qx*qx + py*py - 2*py*qy + qy*qy);
+					acc[i*2 + 0] -= (2*(qx - px))/den;
+					acc[i*2 + 1] -= (2*(qy - py))/den;
+				}
+			}
+		}
+
+		//let's integrate now
+		for (let i of ti.range(n)) {
+			vel[i*2 + 0] += acc[i*2 + 0]*dt;
+			vel[i*2 + 1] += acc[i*2 + 1]*dt;
+
+			pos[i*2 + 0] += vel[i*2 + 0]*dt;
+			pos[i*2 + 1] += vel[i*2 + 1]*dt;
+
+			vel[i*2 + 0] *= 0.8;
+			vel[i*2 + 1] *= 0.8;
+		}
+		
+		//for (let i of ti.range(n)) {
+		//	pos[i*2 + 0] += vel[i*2 + 0];
+		//	pos[i*2 + 1] += vel[i*2 + 1];
+		//}
+		
+
+	});
+
+	
+	
+
+	async function frame() {
+		substep()
+		await draw(pos);
+		requestAnimationFrame(frame);
+	}
+
+	await frame();
+};
+
+
+start();
+
+
+
+
+
+
 
 </script>
 

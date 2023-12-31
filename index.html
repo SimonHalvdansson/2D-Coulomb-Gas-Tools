@@ -183,6 +183,7 @@ let newInt;
 
 let counter;
 let particles;
+let particlesOld;
 let accs;
 let dt;
 
@@ -259,6 +260,7 @@ function reset() {
 	counter = 0
 
 	particles = []
+	particlesOld = []
 	accs = []
 
 	steps = rangejumps.value
@@ -268,6 +270,7 @@ function reset() {
 		x = (Math.random()-0.5)*2.7
 		y = (Math.random()-0.5)*2.7
 		particles.push([x, y, 0, 0])
+		particlesOld.push([x, y])
 		accs.push([0,0])
 	}
 
@@ -361,7 +364,7 @@ self.addEventListener('message', function(e) {
       let qx = particles[j*2+0]
       let qy = particles[j*2+1]
 
-      //for now, let's just do numerical derivative
+      //This formula was found with Wolfram alpha as the derivative
       let den = (px*px - 2*px*qx + qx*qx + py*py - 2*py*qy + qy*qy);
       acc_x -= (2*(qx - px))/den;
       acc_y -= (2*(qy - py))/den;
@@ -377,7 +380,7 @@ self.addEventListener('message', function(e) {
 const workerURL = URL.createObjectURL(blob);
 
 // Initialize worker pool
-let numberOfWorkers = 4;  // Number of workers
+let numberOfWorkers = 4;
 let workerPool = Array.from({ length: numberOfWorkers }, () => new Worker(workerURL));
 
 async function step() {
@@ -416,7 +419,29 @@ async function step() {
     	justReset = false;
     	return;
     }
+
+	//Verlet integration
+	for (let i = 0; i < n; i++) {
+		let tempPosition = [particles[i][0], particles[i][1]]; // Temporary storage of current position
+
+		// Basic Verlet integration
+		let dx = particles[i][0] - particlesOld[i][0] + accs[i][0] * dt * dt;
+		let dy = particles[i][1] - particlesOld[i][1] + accs[i][1] * dt * dt;
+
+		// Apply heuristic damping to displacement
+		dx *= 0.8;
+		dy *= 0.8;
+
+		// Update positions
+		particles[i][0] += dx;
+		particles[i][1] += dy;
+
+		// Store the current position for the next iteration
+		particlesOld[i] = [tempPosition[0], tempPosition[1]];
+	}
 	
+	//Standard Euler integration
+	/*
 	for (let i = 0; i < n; i++) {
 		particles[i][2] += accs[i][0]*dt;
 		particles[i][3] += accs[i][1]*dt;
@@ -427,6 +452,7 @@ async function step() {
 		particles[i][2] *= 0.8;
 		particles[i][3] *= 0.8;
 	}
+	*/
 }
 
 async function updateCPU() {
@@ -475,11 +501,14 @@ window.requestAnimationFrame(updateCPU)
 
 
 
+
+
+//
+//   Unused GPU code
+//
 function startGPU() {
 	start();
 }
-
-
 
 let start = async () => {
 	await ti.init();
@@ -564,6 +593,10 @@ let start = async () => {
 
 	await frame();
 };
+
+
+
+
 
 </script>
 

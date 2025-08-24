@@ -4,109 +4,222 @@
   <meta charset="UTF-8" />
   <title>Sim (WebGPU)</title>
   <style>
-    body{margin:0;padding:0;font-family:monospace;font-size:20px}
-    #main-canvas{border:1px solid black;float:left;margin-right:20px}
-    #container{width:1300px;margin:auto}
-    #controls{padding-top:16px}
-    .panel{padding-top:5px;padding-bottom:5px}
-    button{padding:6px;font-family:monospace;font-size:20px;background:#aaa;margin-top:5px;margin-bottom:5px;border:none}
-    button:hover{background:#bbb}
-    .header{font-weight:bold}
+    :root {
+      --bg: #0f1115;
+      --panel: #151922;
+      --accent: #4f8cff;
+      --muted: #9aa4b2;
+      --text: #e9eef5;
+      --stat: #cdd6e3;
+      --btn: #262c36;
+      --btn-hover: #303846;
+      --border: #212735;
+      --canvas-border: #212735;
+      --gap: 16px;
+      --container-w: 98vw;
+      --container-mt: 24px;
+      --container-mb: 24px;
+    }
+    body.light {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --accent: #2b6bff;
+      --muted: #556070;
+      --text: #0e1320;
+      --stat: #162033;
+      --btn: #e8ecf4;
+      --btn-hover: #dde3ee;
+      --border: #d8dee9;
+      --canvas-border: #cfd7e5;
+    }
+    * { box-sizing: border-box; }
+    html, body { height:100%; }
+    body{
+      margin:0; padding:0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size:16px; color:var(--text); background:var(--bg);
+    }
+    #container{
+      width: var(--container-w);
+      margin: var(--container-mt) auto var(--container-mb) auto;
+      display: grid;
+      grid-template-columns: auto 1fr; /* canvas auto-sized, controls take remaining */
+      gap: var(--gap);
+      align-items: start;
+      justify-content: center; /* keep centered */
+    }
+    #main-canvas{
+      border:1px solid var(--canvas-border);
+      background:#fff;
+      border-radius:12px;
+      display:block;
+      width: 900px;  /* JS resizes to square */
+      height: 900px;
+    }
+    #controls{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:16px;
+      position: sticky;
+      top: 16px;
+      max-width: 520px;
+    }
+    .section{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--border); }
+    .section:last-child{ border-bottom:none; margin-bottom:0; }
+    .header{ font-weight:700; color: var(--muted); letter-spacing:.02em; margin-bottom:8px; }
+    .row{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
+    .stat{ font-variant-numeric: tabular-nums; color: var(--stat); }
+    button{
+      padding:8px 10px; background:var(--btn); color:var(--text);
+      border:1px solid var(--border); border-radius:8px; cursor:pointer;
+      font: inherit;
+      transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+    button:hover{ background: var(--btn-hover); }
+    .pill{
+      padding: 6px 10px; border-radius: 999px; background: #1b2130; border:1px solid var(--border); color: var(--muted);
+    }
+    body.light .pill{ background:#f0f4fb; }
+    input[type="range"]{ width:100%; min-width:260px; accent-color: var(--accent); }
+    #theme-toggle{ accent-color: var(--accent); } /* make checkbox blue */
+    .kv{ display:grid; grid-template-columns: 160px 1fr; align-items:center; gap:8px 12px; }
+    .kv-small{ display:grid; grid-template-columns: 120px 1fr; align-items:center; gap:8px 12px; }
+    .controls-grid{ display:grid; grid-template-columns: 1fr; gap:10px; }
+    details{ border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    summary{ list-style:none; cursor:pointer; padding:10px 12px; background:#1a2030; color:#cfd7e5; }
+    body.light summary{ background:#eef2f8; color:#162033; }
+    summary::-webkit-details-marker{ display:none; }
+    details .inner{ padding:12px; background:#121723; }
+    body.light details .inner{ background:#fbfdff; }
+    .legend{ color: var(--muted); font-size: 13px; }
+    .spaced{ letter-spacing: .01em; }
+    .buttons-wrap{ display:flex; flex-wrap:wrap; gap:6px; } /* particle buttons auto-wrap */
   </style>
 </head>
 <body>
-<div id="container">
+<div id="container"> 
   <canvas id="main-canvas" width="900" height="900"></canvas>
 
   <div id="controls">
-    <div class="panel">
-      <div>GPU acceleration:</div>
-      <input type="checkbox" value="1" id="gpu-acc">
+    <div class="section">
+      <div class="row" style="justify-content: space-between;">
+        <div class="header spaced">Simulation</div>
+        <label class="row pill" style="gap:6px;">
+          <input type="checkbox" id="theme-toggle" checked>
+          <span>Dark mode</span>
+        </label>
+      </div>
+      <div class="controls-grid">
+        <div class="kv">
+          <div>Steps per frame</div>
+          <input type="range" min="1" max="100" value="1" id="rangejumps">
+        </div>
+        <div class="kv">
+          <div>Δt</div>
+          <!-- dt = value / 30000 (range dialed back) -->
+          <input type="range" min="1" max="40" value="5" id="rangedt">
+        </div>
+        <div class="row" style="justify-content: space-between;">
+          <div>Frames: <span id="counter" class="stat">0</span></div>
+          <div>Average speed: <span id="speed" class="stat">…</span></div>
+        </div>
+      </div>
     </div>
 
-    <div class="panel">
-      <div>Jumps:</div>
-      <input type="range" min="1" max="100" value="1" id="rangejumps">
+    <div class="section">
+      <div class="header">Potential</div>
+      <div class="row" style="gap:6px;">
+        <button onclick="setPot(0)">Ginibre</button>
+        <button onclick="setPot(1)">Mittag-Leffler λ=2</button>
+        <button onclick="setPot(2)">Mittag-Leffler λ=10</button>
+        <button onclick="setPot(3)">Lemniscate k=2</button>
+        <button onclick="setPot(4)">Lemniscate k=3</button>
+        <button onclick="setPot(5)">Lemniscate k=5</button>
+        <button onclick="setPot(6)">Lemniscate (interpolated)</button>
+      </div>
     </div>
 
-    <div class="panel">
-      <div>Δt:</div>
-      <input type="range" min="1" max="50" value="1" id="rangedt">
+    <div class="section">
+      <div class="header">Number of particles</div>
+      <div class="buttons-wrap">
+        <button onclick="setN(2)">2</button>
+        <button onclick="setN(50)">50</button>
+        <button onclick="setN(100)">100</button>
+        <button onclick="setN(200)">200</button>
+        <button onclick="setN(500)">500</button>
+        <button onclick="setN(1000)">1&thinsp;000</button>
+        <button onclick="setN(2000)">2&thinsp;000</button>
+        <button onclick="setN(5000)">5&thinsp;000</button>
+        <button onclick="setN(10000)">10&thinsp;000</button>
+        <button onclick="setN(20000)">20&thinsp;000</button>
+        <button onclick="setN(50000)">50&thinsp;000</button>
+        <button onclick="setN(100000)">100&thinsp;000</button>
+        <button onclick="setN(200000)">200&thinsp;000</button>
+        <button onclick="setN(500000)">500&thinsp;000</button>
+      </div>
+      <div class="legend" style="margin-top:6px;">
+        Exact pairwise repulsion is O(n²); very large n may be slow.
+      </div>
     </div>
 
-    <div class="panel">
-      <div>Frames:</div>
-      <div id="counter"></div>
+    <div class="section">
+      <div class="header">Rendering</div>
+      <div class="row" style="gap:12px; flex-wrap:wrap;">
+        <div class="kv-small" style="flex:1 1 260px;">
+          <div>Particle radius</div>
+          <input type="range" min="1" max="10" value="3" id="rangesize">
+        </div>
+        <div class="kv-small" style="flex:1 1 260px;">
+          <div>Particle opacity</div>
+          <input type="range" min="0.1" max="1.0" step="0.05" value="1.0" id="rangeopacity">
+        </div>
+      </div>
     </div>
 
-    <div class="panel">
-      <div>Averge speed:</div>
-      <div id="speed"></div>
-    </div>
+    <div class="section">
+      <details>
+        <summary>Advanced ▸ Lemniscate & inserted scaling</summary>
+        <div class="inner">
+          <div class="kv">
+            <div>Critical scaling</div>
+            <input type="range" min="0" max="100" value="50" id="rangelem">
+          </div>
+          <div class="kv">
+            <div>Interpolation (Lemniscate)</div>
+            <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
+          </div>
 
-    <div class="panel">
-      <button onclick="setPot(0)">Ginibre</button>
-      <button onclick="setPot(1)">Mittag-Leffler λ=2</button>
-      <button onclick="setPot(2)">Mittag-Leffler λ=10</button>
-      <button onclick="setPot(3)">Lem k=2</button>
-      <button onclick="setPot(4)">Lem k=3</button>
-      <button onclick="setPot(5)">Lem k=5</button>
-      <button onclick="setPot(6)">Lem interpo</button>
-    </div>
-
-    <div class="panel">
-      <div class="header">Lemniscate critical scaling:</div>
-      <span>Critical scaling:</span>
-      <input type="range" min="0" max="100" value="50" id="rangelem">
-      <div></div>
-      <span>Interpolation:</span>
-      <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
-    </div>
-
-    <div class="panel">
-      <div class="header">Inserted scaled settings:</div>
-      <span>ca:</span>
-      <input type="range" min="0" max="100" value="0" id="rangeca">
-      <span>ax:</span>
-      <input type="range" min="-50" max="50" value="0" id="rangeax">
-      <span>ay:</span>
-      <input type="range" min="-50" max="50" value="0" id="rangeay">
-      <span>cb:</span>
-      <input type="range" min="0" max="100" value="0" id="rangecb">
-      <span>bx:</span>
-      <input type="range" min="-50" max="50" value="0" id="rangebx">
-      <span>by:</span>
-      <input type="range" min="-50" max="50" value="0" id="rangeby">
-    </div>
-
-    <div class="panel">
-      <div class="header">Particles:</div>
-      <button onclick="setN(1)">n=1</button>
-      <button onclick="setN(2)">n=2</button>
-      <button onclick="setN(10)">n=10</button>
-      <button onclick="setN(50)">n=50</button>
-      <button onclick="setN(100)">n=100</button>
-      <button onclick="setN(200)">n=200</button>
-      <button onclick="setN(500)">n=500</button>
-      <button onclick="setN(1000)">n=1000</button>
-      <button onclick="setN(2000)">n=2000</button>
-      <button onclick="setN(5000)">n=5000</button>
-      <button onclick="setN(10000); setParticleSize(1)">n=10000</button>
-      <button onclick="setN(20000); setParticleSize(1)">n=20000</button>
-      <button onclick="setN(50000); setParticleSize(1)">n=50000</button>
-    </div>
-
-    <div class="panel">
-      <div class="header">Rendering:</div>
-      <span>Particles radius:</span>
-      <input type="range" min="1" max="10" value="3" id="rangesize">
+          <div class="header" style="margin-top:10px;">Inserted scaled settings</div>
+          <div class="kv">
+            <div>ca</div><input type="range" min="0" max="100" value="0" id="rangeca">
+          </div>
+          <div class="kv">
+            <div>ax</div><input type="range" min="-50" max="50" value="0" id="rangeax">
+          </div>
+          <div class="kv">
+            <div>ay</div><input type="range" min="-50" max="50" value="0" id="rangeay">
+          </div>
+          <div class="kv">
+            <div>cb</div><input type="range" min="0" max="100" value="0" id="rangecb">
+          </div>
+          <div class="kv">
+            <div>bx</div><input type="range" min="-50" max="50" value="0" id="rangebx">
+          </div>
+          <div class="kv">
+            <div>by</div><input type="range" min="-50" max="50" value="0" id="rangeby">
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 </div>
 
 <script>
-/* -------------------- UI refs -------------------- */
+/* ===== UI refs ===== */
 const canvas = document.getElementById('main-canvas');
+const controlsPanel = document.getElementById('controls');
+const themeToggle = document.getElementById('theme-toggle');
 const ctxCounter = document.getElementById('counter');
 const ctxSpeed   = document.getElementById('speed');
 
@@ -121,24 +234,27 @@ const rangecb = document.getElementById('rangecb');
 const rangebx = document.getElementById('rangebx');
 const rangeby = document.getElementById('rangeby');
 const rangesize = document.getElementById('rangesize');
-const gpuAcc = document.getElementById('gpu-acc');
+const rangeopacity = document.getElementById('rangeopacity');
 
-/* -------------------- Sim state -------------------- */
-let n = 5000;
+/* ===== Sim state ===== */
+let n = 20000;                 // default 20k
 let steps = parseInt(rangejumps.value, 10);
-let dt = parseFloat(rangedt.value) / 3000.0;
+let dt = parseFloat(rangedt.value) / 30000.0;
 let particleSizePx = parseInt(rangesize.value, 10);
+let userOpacity = parseFloat(rangeopacity.value);
 let frameCounter = 0;
 
 let pot = 0;
 let lemniscateT = parseFloat(rangelem.value)/50.0;
 let lemInterpol = parseFloat(rangeleminterpol.value)/10.0;
 let ca = 0, cb = 0, ax = 0, ay = 0, bx = 0, by = 0;
+
 const h = 1e-4;
 const damping = 0.8;
-const simToClip = 0.7; // sim units -> clip
+let isDark = true;
+const simToClip = 0.7;
 
-/* -------------------- WebGPU setup -------------------- */
+/* ===== WebGPU ===== */
 let device, queue, context, canvasFormat;
 let computePipeline, renderPipeline;
 let simParamsBuf, renderParamsBuf, renderBindGroup;
@@ -146,12 +262,36 @@ let posA, posB, velA, velB;
 let quadVB;
 let stagingVel;
 
-let ping = 0; // 0: read A -> write B; 1: read B -> write A
+let ping = 0;
 const WG_SIZE = 256;
 
-let speedReadbackEvery = 15;
-let lastSpeedReadback = 0;
+let speedReadbackEvery = 20;
+let lastSpeedReadback = -999999;
+let speedMappingInFlight = false;
 
+/* ---- Responsive square canvas ---- */
+function resizeCanvasSquare() {
+  const gap = 16;
+  const sideMargins = (window.innerWidth * 0.02);
+  const topBottom = 24 + 24;
+
+  const maxH = Math.max(300, window.innerHeight - topBottom);
+  const controlsW = controlsPanel.getBoundingClientRect().width;
+  const maxW = Math.max(300, window.innerWidth - controlsW - gap - sideMargins);
+
+  const size = Math.max(300, Math.min(maxH, maxW));
+
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  if (canvas.width !== size || canvas.height !== size) {
+    canvas.width = size;
+    canvas.height = size;
+    writeRenderParams();
+  }
+}
+window.addEventListener('resize', resizeCanvasSquare);
+
+/* ===== WebGPU setup ===== */
 async function initWebGPU() {
   if (!('gpu' in navigator)) {
     alert('WebGPU is not supported in this browser.');
@@ -173,12 +313,11 @@ async function initWebGPU() {
   await createPipelines();
   await createParticleBuffers(n, true);
 
-  gpuAcc.checked = true;
+  resizeCanvasSquare();
   requestAnimationFrame(frame);
 }
 
 function createQuadVB() {
-  // 2 triangles (6 verts) for a unit square centered at origin
   const quad = new Float32Array([
     -0.5, -0.5,
      0.5, -0.5,
@@ -197,17 +336,17 @@ function createQuadVB() {
 }
 
 function createSimParamsBuf() {
-  // Use a comfortably large, 16-byte multiple size (uniform buffer rules)
   simParamsBuf = device.createBuffer({
-    size: 128, // >= needed bytes; multiple of 16
+    size: 64,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
   writeSimParams();
 }
 
 function createRenderParamsBuf() {
+  // simToClip, particleSizePx, canvasW, canvasH, alpha, isDark, pad, pad
   renderParamsBuf = device.createBuffer({
-    size: 16, // 4 * f32
+    size: 32,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   });
   writeRenderParams();
@@ -216,16 +355,15 @@ function createRenderParamsBuf() {
 function writeSimParams() {
   // 4 u32s: n, pot, pad0, pad1
   const u32 = new Uint32Array(4);
-  u32[0] = n;
-  u32[1] = pot;
+  u32[0] = n >>> 0;
+  u32[1] = pot >>> 0;
   u32[2] = 0;
   u32[3] = 0;
 
-  // 14 f32s (includes a little padding at the end)
   const f32 = new Float32Array([
     dt, h, damping, lemniscateT,
     lemInterpol, ca, cb, ax,
-    ay, bx, by, 0, 0, 0
+    ay, bx, by, 0.0
   ]);
 
   const buf = new ArrayBuffer(u32.byteLength + f32.byteLength);
@@ -235,7 +373,10 @@ function writeSimParams() {
 }
 
 function writeRenderParams() {
-  const f32 = new Float32Array([simToClip, particleSizePx, canvas.width, canvas.height]);
+  const f32 = new Float32Array([
+    simToClip, particleSizePx, canvas.width, canvas.height,
+    userOpacity, isDark ? 1.0 : 0.0, 0, 0
+  ]);
   queue.writeBuffer(renderParamsBuf, 0, f32);
 }
 
@@ -259,8 +400,6 @@ struct SimParams {
   ay: f32,
   bx: f32,
   by: f32,
-  _pad2: f32,
-  _pad3: f32,
 };
 
 @group(0) @binding(0) var<storage, read>  posIn : array<vec2<f32>>;
@@ -275,9 +414,9 @@ fn Q(x: f32, y: f32) -> f32 {
 
   var q: f32 = 0.0;
   switch(params.pot) {
-    case 0u: { q = x*x + y*y; }                              // Ginibre
-    case 1u: { q = pow(x*x + y*y, 2.0); }                    // Mittag-Leffler λ=2
-    case 2u: { q = pow(x*x + y*y, 10.0); }                   // Mittag-Leffler λ=10
+    case 0u: { q = x*x + y*y; }
+    case 1u: { q = pow(x*x + y*y, 2.0); }
+    case 2u: { q = pow(x*x + y*y, 10.0); }
     case 3u: { q = pow(x*x + y*y, 2.0) - params.lemniscateT * 2.0 / sqrt(2.0) * pow(r, 2.0) * cos(2.0*theta); }
     case 4u: { q = pow(x*x + y*y, 3.0) - params.lemniscateT * 2.0 / sqrt(3.0) * pow(r, 3.0) * cos(3.0*theta); }
     case 5u: { q = pow(x*x + y*y, 3.0) - params.lemniscateT * 2.0 / sqrt(5.0) * pow(r, 5.0) * cos(5.0*theta); }
@@ -287,7 +426,6 @@ fn Q(x: f32, y: f32) -> f32 {
     default: {}
   }
 
-  // Inserted scaled settings (with eps for stability)
   let dx1 = x - params.ax;
   let dy1 = y + params.ay;
   let dx2 = x - params.bx;
@@ -308,7 +446,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
   let i = gid.x;
   let N = params.n;
 
-  // All lanes execute the same control flow (no early returns).
   var px: f32 = 0.0;
   var py: f32 = 0.0;
   var vx: f32 = 0.0;
@@ -321,12 +458,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
     vy = velIn[i].y;
   }
 
-  // Confining potential gradient (finite difference, scaled by -N)
   let q0 = Q(px, py);
   var accx = -f32(N) * (Q(px + params.h, py) - q0) / params.h;
   var accy = -f32(N) * (Q(px, py + params.h) - q0) / params.h;
 
-  // Tiled O(N^2) repulsion; barriers are in uniform control flow.
   var tileStart: u32 = 0u;
   loop {
     if (tileStart >= N) { break; }
@@ -353,14 +488,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
         accy -= (2.0 * dy) / den;
       }
 
-      k = k + 1u;
+      k = k + 1u; // exact pairs
     }
     workgroupBarrier();
 
     tileStart = tileStart + WG_SIZE;
   }
 
-  // Integrate and store only for in-range lanes
   if (i < N) {
     vx = vx + accx * params.dt;
     vy = vy + accy * params.dt;
@@ -379,41 +513,39 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
 
   const renderWGSL = `
 struct RenderParams {
-  simToClip: f32,
-  particleSizePx: f32,
-  canvasW: f32,
-  canvasH: f32,
+  simToClip: f32,       // a0
+  particleSizePx: f32,  // a1
+  canvasW: f32,         // a2
+  canvasH: f32,         // a3
+  alpha: f32,           // b0
+  isDark: f32,          // b1 (1=dark)
+  _padB: f32,           // b2
+  _padC: f32,           // b3
 };
 
 @group(0) @binding(0) var<uniform> rp: RenderParams;
 
-// Per-vertex quad corners
-struct VSOut {
-  @builtin(position) pos: vec4<f32>,
-};
+struct VSOut { @builtin(position) pos: vec4<f32>, };
 
 @vertex
 fn vs_main(@location(0) quadPos: vec2<f32>,
            @location(1) instPos: vec2<f32>) -> VSOut {
   var out: VSOut;
-
-  // Convert per-instance sim position to clip space
   var base = vec2<f32>(instPos.x * rp.simToClip,
                        instPos.y * rp.simToClip);
-
-  // Expand a small quad in pixels around base position
   let offClip = vec2<f32>(
     quadPos.x * rp.particleSizePx * 2.0 / rp.canvasW,
     -quadPos.y * rp.particleSizePx * 2.0 / rp.canvasH
   );
-
   out.pos = vec4<f32>(base + offClip, 0.0, 1.0);
   return out;
 }
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-  return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+  // Dark mode: light particles; Light mode: dark particles
+  let particle = select(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(1.0, 1.0, 1.0), rp.isDark > 0.5);
+  return vec4<f32>(particle, rp.alpha);
 }
   `;
 
@@ -431,27 +563,24 @@ fn fs_main() -> @location(0) vec4<f32> {
       module: vsfsModule,
       entryPoint: 'vs_main',
       buffers: [
-        { // quad vertices
-          arrayStride: 2*4,
-          stepMode: 'vertex',
-          attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }]
-        },
-        { // per-instance particle positions
-          arrayStride: 2*4,
-          stepMode: 'instance',
-          attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }]
-        }
+        { arrayStride: 2*4, stepMode: 'vertex', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] },
+        { arrayStride: 2*4, stepMode: 'instance', attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }] }
       ]
     },
     fragment: {
       module: vsfsModule,
       entryPoint: 'fs_main',
-      targets: [{ format: canvasFormat }]
+      targets: [{
+        format: canvasFormat,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+        }
+      }]
     },
     primitive: { topology: 'triangle-list' }
   });
 
-  // Bind the RenderParams uniform to group(0), binding(0)
   renderBindGroup = device.createBindGroup({
     layout: renderPipeline.getBindGroupLayout(0),
     entries: [{ binding: 0, resource: { buffer: renderParamsBuf } }],
@@ -461,18 +590,10 @@ fn fs_main() -> @location(0) vec4<f32> {
 async function createParticleBuffers(N, randomize=false) {
   const bytes = N * 2 * 4;
 
-  posA = device.createBuffer({
-    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-  });
-  posB = device.createBuffer({
-    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-  });
-  velA = device.createBuffer({
-    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-  });
-  velB = device.createBuffer({
-    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
-  });
+  posA = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+  posB = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+  velA = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+  velB = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
 
   if (randomize) {
     const pos = new Float32Array(N*2);
@@ -484,28 +605,21 @@ async function createParticleBuffers(N, randomize=false) {
       vel[2*i+1] = 0;
     }
     queue.writeBuffer(posA, 0, pos);
-    queue.writeBuffer(posB, 0, pos); // start identical to avoid a jank first swap
+    queue.writeBuffer(posB, 0, pos);
     queue.writeBuffer(velA, 0, vel);
     queue.writeBuffer(velB, 0, vel);
   }
 
-  // staging buffer for periodic speed readback
-  stagingVel = device.createBuffer({
-    size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-  });
-
-  writeSimParams();
+  stagingVel = device.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
 }
 
 function getBindGroup(pingNow){
-  // pingNow 0: read A -> write B; 1: read B -> write A
   const readPos  = pingNow === 0 ? posA : posB;
   const readVel  = pingNow === 0 ? velA : velB;
   const writePos = pingNow === 0 ? posB : posA;
   const writeVel = pingNow === 0 ? velB : velA;
 
   return {
-    readPos, readVel, writePos, writeVel,
     bg: device.createBindGroup({
       layout: computePipeline.getBindGroupLayout(0),
       entries: [
@@ -519,22 +633,12 @@ function getBindGroup(pingNow){
   };
 }
 
-function getRenderBuffers() {
-  // After compute we render from the *written* pos buffer
-  const currentPos = ping === 0 ? posB : posA;
-  return currentPos;
-}
+function getRenderBuffers() { return ping === 0 ? posB : posA; }
 
 async function frame() {
-  if (!gpuAcc.checked) {
-    requestAnimationFrame(frame);
-    return;
-  }
-
-  // Compute + render
   const encoder = device.createCommandEncoder();
 
-  // Multiple sub-steps per frame
+  writeSimParams();
   for (let s=0; s<steps; s++){
     const { bg } = getBindGroup(ping);
     const pass = encoder.beginComputePass();
@@ -545,36 +649,29 @@ async function frame() {
     ping ^= 1;
   }
 
-  // Periodic speed readback (avg |v|)
-  if ((frameCounter - lastSpeedReadback) >= speedReadbackEvery) {
+  if (!speedMappingInFlight && (frameCounter - lastSpeedReadback) >= speedReadbackEvery) {
     const currentVel = ping === 0 ? velB : velA;
     encoder.copyBufferToBuffer(currentVel, 0, stagingVel, 0, n*2*4);
     lastSpeedReadback = frameCounter;
+    speedMappingInFlight = true;
   }
 
-  // Render
   const currentPos = getRenderBuffers();
   const texView = context.getCurrentTexture().createView();
+  const clearCol = isDark ? {r:0.05,g:0.06,b:0.08,a:1} : {r:1,g:1,b:1,a:1};
   const renderPass = encoder.beginRenderPass({
-    colorAttachments: [{
-      view: texView,
-      clearValue: {r:1,g:1,b:1,a:1},
-      loadOp: 'clear',
-      storeOp: 'store',
-    }]
+    colorAttachments: [{ view: texView, clearValue: clearCol, loadOp: 'clear', storeOp: 'store' }]
   });
   renderPass.setPipeline(renderPipeline);
   renderPass.setBindGroup(0, renderBindGroup);
   renderPass.setVertexBuffer(0, quadVB);
   renderPass.setVertexBuffer(1, currentPos);
-  const vertexCount = 6; // quad
-  renderPass.draw(vertexCount, n, 0, 0);
+  renderPass.draw(6, n, 0, 0);
   renderPass.end();
 
   device.queue.submit([encoder.finish()]);
 
-  // If we scheduled speed readback, map it after submit
-  if (frameCounter === lastSpeedReadback) {
+  if (speedMappingInFlight && frameCounter === lastSpeedReadback) {
     stagingVel.mapAsync(GPUMapMode.READ).then(() => {
       const arr = new Float32Array(stagingVel.getMappedRange());
       let sum = 0.0;
@@ -582,10 +679,10 @@ async function frame() {
         const vx = arr[2*i+0], vy = arr[2*i+1];
         sum += Math.hypot(vx, vy);
       }
-      const avg = sum / n;
-      ctxSpeed.textContent = avg.toFixed(6);
+      ctxSpeed.textContent = (sum / n).toFixed(6);
       stagingVel.unmap();
-    }).catch(()=>{});
+      speedMappingInFlight = false;
+    }).catch(()=>{ speedMappingInFlight = false; });
   }
 
   frameCounter++;
@@ -593,17 +690,55 @@ async function frame() {
   requestAnimationFrame(frame);
 }
 
-/* -------------------- UI handlers -------------------- */
+/* ===== UI handlers ===== */
 function setPot(p){ pot = p; writeSimParams(); }
-function setParticleSize(px){ particleSizePx = px; writeRenderParams(); }
+function setParticleSize(px){
+  particleSizePx = px;
+  rangesize.value = String(px);
+  writeRenderParams();
+}
+function setOpacity(a){
+  userOpacity = a;
+  writeRenderParams();
+}
+
 function setN(N){
   n = N;
+
+  // Auto-assign particle radius based on N
+  if (n <= 500) setParticleSize(4);
+  else if (n === 1000 || n === 2000) setParticleSize(3);
+  else if (n === 5000) setParticleSize(2);
+  else setParticleSize(1);
+
+  // For 200k or 500k reset dt to default start value (5/30000)
+  if (n === 200000 || n === 500000) {
+    rangedt.value = 5;
+    dt = 5 / 30000.0;
+    writeSimParams();
+  }
+
+  // Optional: set an initial opacity suggestion based on n (but user slider rules)
+  if (n >= 500000) rangeopacity.value = 0.3;
+  else if (n >= 200000) rangeopacity.value = 0.4;
+  else if (n >= 100000) rangeopacity.value = 0.5;
+  else if (n >= 50000)  rangeopacity.value = 0.7;
+  else rangeopacity.value = 1.0;
+  setOpacity(parseFloat(rangeopacity.value));
+
+  writeRenderParams();
   createParticleBuffers(n, true);
+  ping = 0;
   frameCounter = 0;
+  lastSpeedReadback = -999999;
+  speedMappingInFlight = false;
+  ctxSpeed.textContent = '…';
+
+  resizeCanvasSquare();
 }
 
 rangejumps.oninput = () => { steps = parseInt(rangejumps.value, 10); };
-rangedt.oninput    = () => { dt = parseFloat(rangedt.value)/3000.0; writeSimParams(); };
+rangedt.oninput    = () => { dt = parseFloat(rangedt.value)/30000.0; writeSimParams(); };
 
 rangelem.oninput = () => { lemniscateT = parseFloat(rangelem.value)/50.0; writeSimParams(); };
 rangeleminterpol.oninput = () => { lemInterpol = parseFloat(rangeleminterpol.value)/10.0; writeSimParams(); };
@@ -616,18 +751,21 @@ rangebx.oninput = () => { bx = parseFloat(rangebx.value)/50.0; writeSimParams();
 rangeby.oninput = () => { by = parseFloat(rangeby.value)/50.0; writeSimParams(); };
 
 rangesize.oninput = () => { setParticleSize(parseInt(rangesize.value, 10)); };
+rangeopacity.oninput = () => { setOpacity(parseFloat(rangeopacity.value)); };
 
-gpuAcc.addEventListener('change', () => {
-  if (gpuAcc.checked) requestAnimationFrame(frame);
+themeToggle.addEventListener('change', () => {
+  isDark = themeToggle.checked;
+  document.body.classList.toggle('light', !isDark);
+  writeRenderParams();
 });
 
-// Expose for buttons
+/* Expose for buttons */
 window.setPot = setPot;
 window.setN = setN;
 window.setParticleSize = setParticleSize;
 
-/* -------------------- Kickoff -------------------- */
-initWebGPU().catch(err => {
+/* ===== Kickoff ===== */
+initWebGPU().then(resizeCanvasSquare).catch(err => {
   console.error(err);
   alert('Failed to initialize WebGPU. Try Chrome/Edge with chrome://flags/#enable-unsafe-webgpu enabled.');
 });

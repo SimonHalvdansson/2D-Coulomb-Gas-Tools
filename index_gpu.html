@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sim (WebGPU)</title>
+  <style>
+    body{margin:0;padding:0;font-family:monospace;font-size:20px}
+    #main-canvas{border:1px solid black;float:left;margin-right:20px}
+    #container{width:1300px;margin:auto}
+    #controls{padding-top:16px}
+    .panel{padding-top:5px;padding-bottom:5px}
+    button{padding:6px;font-family:monospace;font-size:20px;background:#aaa;margin-top:5px;margin-bottom:5px;border:none}
+    button:hover{background:#bbb}
+    .header{font-weight:bold}
+  </style>
+</head>
+<body>
+<div id="container">
+  <canvas id="main-canvas" width="900" height="900"></canvas>
+
+  <div id="controls">
+    <div class="panel">
+      <div>GPU acceleration:</div>
+      <input type="checkbox" value="1" id="gpu-acc">
+    </div>
+
+    <div class="panel">
+      <div>Jumps:</div>
+      <input type="range" min="1" max="100" value="1" id="rangejumps">
+    </div>
+
+    <div class="panel">
+      <div>Δt:</div>
+      <input type="range" min="1" max="50" value="1" id="rangedt">
+    </div>
+
+    <div class="panel">
+      <div>Frames:</div>
+      <div id="counter"></div>
+    </div>
+
+    <div class="panel">
+      <div>Averge speed:</div>
+      <div id="speed"></div>
+    </div>
+
+    <div class="panel">
+      <button onclick="setPot(0)">Ginibre</button>
+      <button onclick="setPot(1)">Mittag-Leffler λ=2</button>
+      <button onclick="setPot(2)">Mittag-Leffler λ=10</button>
+      <button onclick="setPot(3)">Lem k=2</button>
+      <button onclick="setPot(4)">Lem k=3</button>
+      <button onclick="setPot(5)">Lem k=5</button>
+      <button onclick="setPot(6)">Lem interpo</button>
+    </div>
+
+    <div class="panel">
+      <div class="header">Lemniscate critical scaling:</div>
+      <span>Critical scaling:</span>
+      <input type="range" min="0" max="100" value="50" id="rangelem">
+      <div></div>
+      <span>Interpolation:</span>
+      <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
+    </div>
+
+    <div class="panel">
+      <div class="header">Inserted scaled settings:</div>
+      <span>ca:</span>
+      <input type="range" min="0" max="100" value="0" id="rangeca">
+      <span>ax:</span>
+      <input type="range" min="-50" max="50" value="0" id="rangeax">
+      <span>ay:</span>
+      <input type="range" min="-50" max="50" value="0" id="rangeay">
+      <span>cb:</span>
+      <input type="range" min="0" max="100" value="0" id="rangecb">
+      <span>bx:</span>
+      <input type="range" min="-50" max="50" value="0" id="rangebx">
+      <span>by:</span>
+      <input type="range" min="-50" max="50" value="0" id="rangeby">
+    </div>
+
+    <div class="panel">
+      <div class="header">Particles:</div>
+      <button onclick="setN(1)">n=1</button>
+      <button onclick="setN(2)">n=2</button>
+      <button onclick="setN(10)">n=10</button>
+      <button onclick="setN(50)">n=50</button>
+      <button onclick="setN(100)">n=100</button>
+      <button onclick="setN(200)">n=200</button>
+      <button onclick="setN(500)">n=500</button>
+      <button onclick="setN(1000)">n=1000</button>
+      <button onclick="setN(2000)">n=2000</button>
+      <button onclick="setN(5000)">n=5000</button>
+      <button onclick="setN(10000); setParticleSize(1)">n=10000</button>
+      <button onclick="setN(20000); setParticleSize(1)">n=20000</button>
+      <button onclick="setN(50000); setParticleSize(1)">n=50000</button>
+    </div>
+
+    <div class="panel">
+      <div class="header">Rendering:</div>
+      <span>Particles radius:</span>
+      <input type="range" min="1" max="10" value="3" id="rangesize">
+    </div>
+  </div>
+</div>
+
+<script>
+/* -------------------- UI refs -------------------- */
+const canvas = document.getElementById('main-canvas');
+const ctxCounter = document.getElementById('counter');
+const ctxSpeed   = document.getElementById('speed');
+
+const rangejumps = document.getElementById('rangejumps');
+const rangedt    = document.getElementById('rangedt');
+const rangelem   = document.getElementById('rangelem');
+const rangeleminterpol = document.getElementById('rangeleminterpol');
+const rangeca = document.getElementById('rangeca');
+const rangeax = document.getElementById('rangeax');
+const rangeay = document.getElementById('rangeay');
+const rangecb = document.getElementById('rangecb');
+const rangebx = document.getElementById('rangebx');
+const rangeby = document.getElementById('rangeby');
+const rangesize = document.getElementById('rangesize');
+const gpuAcc = document.getElementById('gpu-acc');
+
+/* -------------------- Sim state -------------------- */
+let n = 5000;
+let steps = parseInt(rangejumps.value, 10);
+let dt = parseFloat(rangedt.value) / 3000.0;
+let particleSizePx = parseInt(rangesize.value, 10);
+let frameCounter = 0;
+
+let pot = 0;
+let lemniscateT = parseFloat(rangelem.value)/50.0;
+let lemInterpol = parseFloat(rangeleminterpol.value)/10.0;
+let ca = 0, cb = 0, ax = 0, ay = 0, bx = 0, by = 0;
+const h = 1e-4;
+const damping = 0.8;
+const simToClip = 0.7; // sim units -> clip
+
+/* -------------------- WebGPU setup -------------------- */
+let device, queue, context, canvasFormat;
+let computePipeline, renderPipeline;
+let simParamsBuf, renderParamsBuf, renderBindGroup;
+let posA, posB, velA, velB;
+let quadVB;
+let stagingVel;
+
+let ping = 0; // 0: read A -> write B; 1: read B -> write A
+const WG_SIZE = 256;
+
+let speedReadbackEvery = 15;
+let lastSpeedReadback = 0;
+
+async function initWebGPU() {
+  if (!('gpu' in navigator)) {
+    alert('WebGPU is not supported in this browser.');
+    throw new Error('No WebGPU');
+  }
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error('No GPU adapter');
+  device = await adapter.requestDevice();
+  queue = device.queue;
+
+  context = canvas.getContext('webgpu');
+  canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({ device, format: canvasFormat, alphaMode: 'opaque' });
+
+  createRenderParamsBuf();
+  createSimParamsBuf();
+  createQuadVB();
+
+  await createPipelines();
+  await createParticleBuffers(n, true);
+
+  gpuAcc.checked = true;
+  requestAnimationFrame(frame);
+}
+
+function createQuadVB() {
+  // 2 triangles (6 verts) for a unit square centered at origin
+  const quad = new Float32Array([
+    -0.5, -0.5,
+     0.5, -0.5,
+     0.5,  0.5,
+    -0.5, -0.5,
+     0.5,  0.5,
+    -0.5,  0.5,
+  ]);
+  quadVB = device.createBuffer({
+    size: quad.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    mappedAtCreation: true
+  });
+  new Float32Array(quadVB.getMappedRange()).set(quad);
+  quadVB.unmap();
+}
+
+function createSimParamsBuf() {
+  // Use a comfortably large, 16-byte multiple size (uniform buffer rules)
+  simParamsBuf = device.createBuffer({
+    size: 128, // >= needed bytes; multiple of 16
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  writeSimParams();
+}
+
+function createRenderParamsBuf() {
+  renderParamsBuf = device.createBuffer({
+    size: 16, // 4 * f32
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+  });
+  writeRenderParams();
+}
+
+function writeSimParams() {
+  // 4 u32s: n, pot, pad0, pad1
+  const u32 = new Uint32Array(4);
+  u32[0] = n;
+  u32[1] = pot;
+  u32[2] = 0;
+  u32[3] = 0;
+
+  // 14 f32s (includes a little padding at the end)
+  const f32 = new Float32Array([
+    dt, h, damping, lemniscateT,
+    lemInterpol, ca, cb, ax,
+    ay, bx, by, 0, 0, 0
+  ]);
+
+  const buf = new ArrayBuffer(u32.byteLength + f32.byteLength);
+  new Uint32Array(buf, 0, 4).set(u32);
+  new Float32Array(buf, u32.byteLength, f32.length).set(f32);
+  queue.writeBuffer(simParamsBuf, 0, buf);
+}
+
+function writeRenderParams() {
+  const f32 = new Float32Array([simToClip, particleSizePx, canvas.width, canvas.height]);
+  queue.writeBuffer(renderParamsBuf, 0, f32);
+}
+
+async function createPipelines() {
+  const computeWGSL = `
+const WG_SIZE : u32 = 256u;
+
+struct SimParams {
+  n: u32,
+  pot: u32,
+  _pad0: u32,
+  _pad1: u32,
+  dt: f32,
+  h: f32,
+  damping: f32,
+  lemniscateT: f32,
+  lemInterpol: f32,
+  ca: f32,
+  cb: f32,
+  ax: f32,
+  ay: f32,
+  bx: f32,
+  by: f32,
+  _pad2: f32,
+  _pad3: f32,
+};
+
+@group(0) @binding(0) var<storage, read>  posIn : array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read>  velIn : array<vec2<f32>>;
+@group(0) @binding(2) var<storage, read_write> posOut: array<vec2<f32>>;
+@group(0) @binding(3) var<storage, read_write> velOut: array<vec2<f32>>;
+@group(0) @binding(4) var<uniform> params : SimParams;
+
+fn Q(x: f32, y: f32) -> f32 {
+  let r = sqrt(x*x + y*y);
+  let theta = atan2(y, x);
+
+  var q: f32 = 0.0;
+  switch(params.pot) {
+    case 0u: { q = x*x + y*y; }                              // Ginibre
+    case 1u: { q = pow(x*x + y*y, 2.0); }                    // Mittag-Leffler λ=2
+    case 2u: { q = pow(x*x + y*y, 10.0); }                   // Mittag-Leffler λ=10
+    case 3u: { q = pow(x*x + y*y, 2.0) - params.lemniscateT * 2.0 / sqrt(2.0) * pow(r, 2.0) * cos(2.0*theta); }
+    case 4u: { q = pow(x*x + y*y, 3.0) - params.lemniscateT * 2.0 / sqrt(3.0) * pow(r, 3.0) * cos(3.0*theta); }
+    case 5u: { q = pow(x*x + y*y, 3.0) - params.lemniscateT * 2.0 / sqrt(5.0) * pow(r, 5.0) * cos(5.0*theta); }
+    case 6u: { q = pow(x*x + y*y, params.lemInterpol)
+                   - params.lemniscateT * 2.0 / sqrt(params.lemInterpol)
+                     * pow(r, params.lemInterpol) * cos(params.lemInterpol*theta); }
+    default: {}
+  }
+
+  // Inserted scaled settings (with eps for stability)
+  let dx1 = x - params.ax;
+  let dy1 = y + params.ay;
+  let dx2 = x - params.bx;
+  let dy2 = y - params.by;
+  let eps = 1e-6;
+  let d1sq = dx1*dx1 + dy1*dy1 + eps;
+  let d2sq = dx2*dx2 + dy2*dy2 + eps;
+  q = q + (-params.cb * 0.5 * log(d2sq) - params.ca * 0.5 * log(d1sq));
+  return q;
+}
+
+var<workgroup> tilePos: array<vec2<f32>, WG_SIZE>;
+
+@compute @workgroup_size(WG_SIZE)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+        @builtin(local_invocation_id)  lid: vec3<u32>) {
+
+  let i = gid.x;
+  let N = params.n;
+
+  // All lanes execute the same control flow (no early returns).
+  var px: f32 = 0.0;
+  var py: f32 = 0.0;
+  var vx: f32 = 0.0;
+  var vy: f32 = 0.0;
+
+  if (i < N) {
+    px = posIn[i].x;
+    py = posIn[i].y;
+    vx = velIn[i].x;
+    vy = velIn[i].y;
+  }
+
+  // Confining potential gradient (finite difference, scaled by -N)
+  let q0 = Q(px, py);
+  var accx = -f32(N) * (Q(px + params.h, py) - q0) / params.h;
+  var accy = -f32(N) * (Q(px, py + params.h) - q0) / params.h;
+
+  // Tiled O(N^2) repulsion; barriers are in uniform control flow.
+  var tileStart: u32 = 0u;
+  loop {
+    if (tileStart >= N) { break; }
+
+    let j = tileStart + lid.x;
+    if (j < N) {
+      tilePos[lid.x] = posIn[j];
+    } else {
+      tilePos[lid.x] = vec2<f32>(1e9, 1e9);
+    }
+    workgroupBarrier();
+
+    let count = min(WG_SIZE, N - tileStart);
+    var k: u32 = 0u;
+    loop {
+      if (k >= count) { break; }
+      let jg = tileStart + k;
+
+      if (jg != i) {
+        let dx = tilePos[k].x - px;
+        let dy = tilePos[k].y - py;
+        let den = dx*dx + dy*dy + 1e-6;
+        accx -= (2.0 * dx) / den;
+        accy -= (2.0 * dy) / den;
+      }
+
+      k = k + 1u;
+    }
+    workgroupBarrier();
+
+    tileStart = tileStart + WG_SIZE;
+  }
+
+  // Integrate and store only for in-range lanes
+  if (i < N) {
+    vx = vx + accx * params.dt;
+    vy = vy + accy * params.dt;
+
+    px = px + vx * params.dt;
+    py = py + vy * params.dt;
+
+    vx = vx * params.damping;
+    vy = vy * params.damping;
+
+    posOut[i] = vec2<f32>(px, py);
+    velOut[i] = vec2<f32>(vx, vy);
+  }
+}
+  `;
+
+  const renderWGSL = `
+struct RenderParams {
+  simToClip: f32,
+  particleSizePx: f32,
+  canvasW: f32,
+  canvasH: f32,
+};
+
+@group(0) @binding(0) var<uniform> rp: RenderParams;
+
+// Per-vertex quad corners
+struct VSOut {
+  @builtin(position) pos: vec4<f32>,
+};
+
+@vertex
+fn vs_main(@location(0) quadPos: vec2<f32>,
+           @location(1) instPos: vec2<f32>) -> VSOut {
+  var out: VSOut;
+
+  // Convert per-instance sim position to clip space
+  var base = vec2<f32>(instPos.x * rp.simToClip,
+                       instPos.y * rp.simToClip);
+
+  // Expand a small quad in pixels around base position
+  let offClip = vec2<f32>(
+    quadPos.x * rp.particleSizePx * 2.0 / rp.canvasW,
+    -quadPos.y * rp.particleSizePx * 2.0 / rp.canvasH
+  );
+
+  out.pos = vec4<f32>(base + offClip, 0.0, 1.0);
+  return out;
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+  return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+  `;
+
+  const csModule = device.createShaderModule({code: computeWGSL});
+  const vsfsModule = device.createShaderModule({code: renderWGSL});
+
+  computePipeline = device.createComputePipeline({
+    layout: 'auto',
+    compute: { module: csModule, entryPoint: 'main' }
+  });
+
+  renderPipeline = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: {
+      module: vsfsModule,
+      entryPoint: 'vs_main',
+      buffers: [
+        { // quad vertices
+          arrayStride: 2*4,
+          stepMode: 'vertex',
+          attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }]
+        },
+        { // per-instance particle positions
+          arrayStride: 2*4,
+          stepMode: 'instance',
+          attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }]
+        }
+      ]
+    },
+    fragment: {
+      module: vsfsModule,
+      entryPoint: 'fs_main',
+      targets: [{ format: canvasFormat }]
+    },
+    primitive: { topology: 'triangle-list' }
+  });
+
+  // Bind the RenderParams uniform to group(0), binding(0)
+  renderBindGroup = device.createBindGroup({
+    layout: renderPipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: renderParamsBuf } }],
+  });
+}
+
+async function createParticleBuffers(N, randomize=false) {
+  const bytes = N * 2 * 4;
+
+  posA = device.createBuffer({
+    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+  posB = device.createBuffer({
+    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+  velA = device.createBuffer({
+    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+  velB = device.createBuffer({
+    size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+  });
+
+  if (randomize) {
+    const pos = new Float32Array(N*2);
+    const vel = new Float32Array(N*2);
+    for (let i=0;i<N;i++){
+      pos[2*i+0] = (Math.random()-0.5)*2.7;
+      pos[2*i+1] = (Math.random()-0.5)*2.7;
+      vel[2*i+0] = 0;
+      vel[2*i+1] = 0;
+    }
+    queue.writeBuffer(posA, 0, pos);
+    queue.writeBuffer(posB, 0, pos); // start identical to avoid a jank first swap
+    queue.writeBuffer(velA, 0, vel);
+    queue.writeBuffer(velB, 0, vel);
+  }
+
+  // staging buffer for periodic speed readback
+  stagingVel = device.createBuffer({
+    size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+  });
+
+  writeSimParams();
+}
+
+function getBindGroup(pingNow){
+  // pingNow 0: read A -> write B; 1: read B -> write A
+  const readPos  = pingNow === 0 ? posA : posB;
+  const readVel  = pingNow === 0 ? velA : velB;
+  const writePos = pingNow === 0 ? posB : posA;
+  const writeVel = pingNow === 0 ? velB : velA;
+
+  return {
+    readPos, readVel, writePos, writeVel,
+    bg: device.createBindGroup({
+      layout: computePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: readPos } },
+        { binding: 1, resource: { buffer: readVel } },
+        { binding: 2, resource: { buffer: writePos } },
+        { binding: 3, resource: { buffer: writeVel } },
+        { binding: 4, resource: { buffer: simParamsBuf } },
+      ]
+    })
+  };
+}
+
+function getRenderBuffers() {
+  // After compute we render from the *written* pos buffer
+  const currentPos = ping === 0 ? posB : posA;
+  return currentPos;
+}
+
+async function frame() {
+  if (!gpuAcc.checked) {
+    requestAnimationFrame(frame);
+    return;
+  }
+
+  // Compute + render
+  const encoder = device.createCommandEncoder();
+
+  // Multiple sub-steps per frame
+  for (let s=0; s<steps; s++){
+    const { bg } = getBindGroup(ping);
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(computePipeline);
+    pass.setBindGroup(0, bg);
+    pass.dispatchWorkgroups(Math.ceil(n / WG_SIZE));
+    pass.end();
+    ping ^= 1;
+  }
+
+  // Periodic speed readback (avg |v|)
+  if ((frameCounter - lastSpeedReadback) >= speedReadbackEvery) {
+    const currentVel = ping === 0 ? velB : velA;
+    encoder.copyBufferToBuffer(currentVel, 0, stagingVel, 0, n*2*4);
+    lastSpeedReadback = frameCounter;
+  }
+
+  // Render
+  const currentPos = getRenderBuffers();
+  const texView = context.getCurrentTexture().createView();
+  const renderPass = encoder.beginRenderPass({
+    colorAttachments: [{
+      view: texView,
+      clearValue: {r:1,g:1,b:1,a:1},
+      loadOp: 'clear',
+      storeOp: 'store',
+    }]
+  });
+  renderPass.setPipeline(renderPipeline);
+  renderPass.setBindGroup(0, renderBindGroup);
+  renderPass.setVertexBuffer(0, quadVB);
+  renderPass.setVertexBuffer(1, currentPos);
+  const vertexCount = 6; // quad
+  renderPass.draw(vertexCount, n, 0, 0);
+  renderPass.end();
+
+  device.queue.submit([encoder.finish()]);
+
+  // If we scheduled speed readback, map it after submit
+  if (frameCounter === lastSpeedReadback) {
+    stagingVel.mapAsync(GPUMapMode.READ).then(() => {
+      const arr = new Float32Array(stagingVel.getMappedRange());
+      let sum = 0.0;
+      for (let i=0;i<n;i++){
+        const vx = arr[2*i+0], vy = arr[2*i+1];
+        sum += Math.hypot(vx, vy);
+      }
+      const avg = sum / n;
+      ctxSpeed.textContent = avg.toFixed(6);
+      stagingVel.unmap();
+    }).catch(()=>{});
+  }
+
+  frameCounter++;
+  ctxCounter.textContent = frameCounter.toString();
+  requestAnimationFrame(frame);
+}
+
+/* -------------------- UI handlers -------------------- */
+function setPot(p){ pot = p; writeSimParams(); }
+function setParticleSize(px){ particleSizePx = px; writeRenderParams(); }
+function setN(N){
+  n = N;
+  createParticleBuffers(n, true);
+  frameCounter = 0;
+}
+
+rangejumps.oninput = () => { steps = parseInt(rangejumps.value, 10); };
+rangedt.oninput    = () => { dt = parseFloat(rangedt.value)/3000.0; writeSimParams(); };
+
+rangelem.oninput = () => { lemniscateT = parseFloat(rangelem.value)/50.0; writeSimParams(); };
+rangeleminterpol.oninput = () => { lemInterpol = parseFloat(rangeleminterpol.value)/10.0; writeSimParams(); };
+
+rangeca.oninput = () => { ca = parseFloat(rangeca.value)/100.0; writeSimParams(); };
+rangeax.oninput = () => { ax = parseFloat(rangeax.value)/50.0; writeSimParams(); };
+rangeay.oninput = () => { ay = parseFloat(rangeay.value)/50.0; writeSimParams(); };
+rangecb.oninput = () => { cb = parseFloat(rangecb.value)/100.0; writeSimParams(); };
+rangebx.oninput = () => { bx = parseFloat(rangebx.value)/50.0; writeSimParams(); };
+rangeby.oninput = () => { by = parseFloat(rangeby.value)/50.0; writeSimParams(); };
+
+rangesize.oninput = () => { setParticleSize(parseInt(rangesize.value, 10)); };
+
+gpuAcc.addEventListener('change', () => {
+  if (gpuAcc.checked) requestAnimationFrame(frame);
+});
+
+// Expose for buttons
+window.setPot = setPot;
+window.setN = setN;
+window.setParticleSize = setParticleSize;
+
+/* -------------------- Kickoff -------------------- */
+initWebGPU().catch(err => {
+  console.error(err);
+  alert('Failed to initialize WebGPU. Try Chrome/Edge with chrome://flags/#enable-unsafe-webgpu enabled.');
+});
+</script>
+</body>
+</html>

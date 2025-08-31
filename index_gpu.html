@@ -80,6 +80,34 @@
       overflow-y: auto;
     }
 
+    /* Firefox */
+#controls{
+  scrollbar-width: thin;                 /* thin | auto */
+  scrollbar-color: var(--btn-hover) transparent;
+  scrollbar-gutter: stable;              /* avoids layout shift when bar appears */
+}
+
+/* WebKit (Chrome/Edge/Safari) */
+#controls::-webkit-scrollbar{
+  width: 10px;
+}
+#controls::-webkit-scrollbar-track{
+  background: transparent;
+}
+#controls::-webkit-scrollbar-thumb{
+  background-color: var(--btn);
+  border-radius: 8px;
+  border: 2px solid transparent;        /* creates inset look */
+  background-clip: content-box;
+}
+#controls::-webkit-scrollbar-thumb:hover{
+  background-color: var(--btn-hover);
+}
+
+/* Optional: native dark/light scrollbars where supported */
+body:not(.light) #controls{ color-scheme: dark; }
+body.light #controls{ color-scheme: light; }
+
     /* Compact controls when the panel gets narrow */
     #controls.compact { font-size:14px; }
     #controls.compact .kv { grid-template-columns: 140px 1fr; }
@@ -347,8 +375,8 @@ function adjustLayout() {
     controlsPanel.style.maxHeight = Math.max(180, remaining) + 'px';
     controlsPanel.style.overflowY = 'auto';
   } else {
-    controlsPanel.style.maxHeight = '';
-    controlsPanel.style.overflowY = 'hidden';
+  controlsPanel.style.maxHeight = 'leave'; // or leave '' to use the CSS rule
+  controlsPanel.style.overflowY = 'auto';
   }
 }
 

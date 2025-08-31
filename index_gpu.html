@@ -143,16 +143,24 @@
           <div>Δt</div>
           <input type="range" min="1" max="40" value="5" id="rangedt">
         </div>
-        <div class="row" style="justify-content: flex-start; gap:24px;">
-          <div>Frames: <span id="counter" class="stat">0</span></div>
+          <div class="row" style="justify-content: flex-start; gap:24px;">
+            <div>Frames: <span id="counter" class="stat">0</span></div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="header">Potential</div>
-      <div class="row toggle-group" id="pot-group" style="gap:6px;">
-        <button data-pot="0">Ginibre</button>
+      <div class="section">
+        <div class="header">What is this?</div>
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+          <div>This GPU-based simulation visualizes a two-dimensional Coulomb gas.</div>
+          <button onclick="window.open('thesis.pdf','_blank')">Open PDF</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="header">Potential</div>
+        <div class="row toggle-group" id="pot-group" style="gap:6px;">
+          <button data-pot="0">Ginibre</button>
         <button data-pot="1">Mittag-Leffler λ=2</button>
         <button data-pot="2">Mittag-Leffler λ=10</button>
         <button data-pot="3">Lemniscate k=2</button>

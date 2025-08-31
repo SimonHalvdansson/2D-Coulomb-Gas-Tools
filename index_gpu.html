@@ -89,13 +89,15 @@
     .header{ font-weight:700; color: var(--muted); letter-spacing:.02em; margin-bottom:8px; }
     .row{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
     .stat{ font-variant-numeric: tabular-nums; color: var(--stat); }
-    button{
+    button, .link-button{
       padding:8px 10px; background: var(--btn); color: var(--text);
       border:1px solid var(--border); border-radius:8px; cursor:pointer;
       font: inherit;
       transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+      text-decoration:none;
+      display:inline-block;
     }
-    button:hover{ background: var(--btn-hover); }
+    button:hover, .link-button:hover{ background: var(--btn-hover); }
     .toggle-group button.active{
       background: var(--accent);
       color: #fff;
@@ -143,16 +145,24 @@
           <div>Δt</div>
           <input type="range" min="1" max="40" value="5" id="rangedt">
         </div>
-        <div class="row" style="justify-content: flex-start; gap:24px;">
-          <div>Frames: <span id="counter" class="stat">0</span></div>
+          <div class="row" style="justify-content: flex-start; gap:24px;">
+            <div>Frames: <span id="counter" class="stat">0</span></div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <div class="header">Potential</div>
-      <div class="row toggle-group" id="pot-group" style="gap:6px;">
-        <button data-pot="0">Ginibre</button>
+      <div class="section">
+        <div class="header">What is this?</div>
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+          <div>Each dot represents an electron which experiences pariwise Couolmb repulsions with all other electrons. The collection of particles does not disperse due to the confining potential which explodes at infinite. The minimum energy configuration is known as a <i>Fekete configuration</i>. For more on the background and context of these systems see my bachelor thesis below.</div>
+          <a href="https://simonhalvdansson.github.io/bachelor_thesis.pdf" target="_blank" class="link-button">PDF</a>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="header">Potential</div>
+        <div class="row toggle-group" id="pot-group" style="gap:6px;">
+          <button data-pot="0">Ginibre</button>
         <button data-pot="1">Mittag-Leffler λ=2</button>
         <button data-pot="2">Mittag-Leffler λ=10</button>
         <button data-pot="3">Lemniscate k=2</button>

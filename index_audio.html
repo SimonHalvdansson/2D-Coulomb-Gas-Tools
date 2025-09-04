@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>Audio-Driven Coulomb Gas (WebGPU)</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<style>
+		:root{ --bg:#0f1115; --text:#e9eef5; --muted:#9aa4b2; --border:#212735; }
+		*{box-sizing:border-box}
+		html,body{height:100%;margin:0}
+		body{background:var(--bg);color:var(--text);font:14px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+		.wrap{height:100%;display:flex;flex-direction:column;gap:10px;padding:10px}
+		.stage{position:relative;flex:1 1 auto;display:flex;align-items:center;justify-content:center}
+		canvas{display:block;border:1px solid var(--border);border-radius:12px;background:#000}
+		.footer{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+		audio{width:100%}
+		.badge{
+			position:absolute;top:10px;left:10px;
+			background:rgba(21,25,34,.72);border:1px solid var(--border);
+			padding:6px 10px;border-radius:8px;color:var(--muted);
+			font-variant-numeric:tabular-nums;backdrop-filter:saturate(1.2) blur(6px)
+		}
+		.note{color:var(--muted)}
+	</style>
+</head>
+<body>
+<div class="wrap">
+	<div class="stage">
+		<canvas id="c" width="900" height="900"></canvas>
+		<div class="badge" id="stats">λ 2.00 • n 20 000</div>
+	</div>
+	<div class="footer">
+		<audio id="player" src="audio.mp3" controls preload="auto" crossorigin="anonymous"></audio>
+		<div class="note">Press Play, then click the page if the browser requires a gesture.</div>
+	</div>
+</div>
+
+<script>
+/* ---------- DOM ---------- */
+const canvas = document.getElementById('c');
+const stats  = document.getElementById('stats');
+const audioEl = document.getElementById('player');
+
+/* ---------- Layout ---------- */
+function fitCanvas(){
+	const pad = 20;
+	const footerH = document.querySelector('.footer').getBoundingClientRect().height;
+	const w = window.innerWidth - pad;
+	const h = window.innerHeight - footerH - pad*2 - 8;
+	const size = Math.max(300, Math.min(w, h));
+	if (canvas.width !== size || canvas.height !== size){
+		canvas.width = size;
+		canvas.height = size;
+		renderDirty = true;
+	}
+	canvas.style.width = size + 'px';
+	canvas.style.height = size + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+
+/* ---------- Audio (RMS -> λ) ---------- */
+let actx, analyser, timeBuf;
+let smoothRms = 0, lambda = 2.0;
+const LMIN = 1.0, LMAX = 10.0;
+
+function setupAudio(){
+	try{
+		actx = new (window.AudioContext || window.webkitAudioContext)();
+		const src = actx.createMediaElementSource(audioEl);
+		analyser = actx.createAnalyser();
+		analyser.fftSize = 2048;
+		analyser.smoothingTimeConstant = 0.3;
+		timeBuf = new Float32Array(analyser.fftSize);
+		src.connect(analyser);
+		analyser.connect(actx.destination);
+	}catch(e){ console.warn('Audio init failed', e); }
+}
+audioEl.addEventListener('play', () => actx && actx.resume());
+document.addEventListener('click', () => actx && actx.resume(), { once:true });
+
+function updateLambdaFromAudio(){
+	if (!analyser) return lambda;
+	analyser.getFloatTimeDomainData(timeBuf);
+	let s = 0;
+	for (let i=0;i<timeBuf.length;i++){ const v = timeBuf[i]; s += v*v; }
+	const rms = Math.sqrt(s / timeBuf.length);
+	smoothRms = 0.90*smoothRms + 0.10*rms;
+	const x = Math.min(1, Math.max(0, Math.pow(smoothRms * 3.0, 0.60)));
+	return LMIN + (LMAX - LMIN) * x;
+}
+
+/* ---------- WebGPU ---------- */
+let adapter, device, queue, context, canvasFormat;
+let computePipeline, renderPipeline;
+let simParamsBuf, renderParamsBuf, renderBG;
+let posA, posB, velA, velB, quadVB;
+let computeBG = [];
+let WG_SIZE_JS = 256;
+let numGroups = 0;
+let ping = 0;
+let stepsPerFrame = 1;
+let dt = 1/1500;
+let damping = 0.85;
+let renderDirty = true;
+
+let n = 20000;
+let simToClip = 0.70;
+let particlePx = (n <= 500)?4 : (n===1000||n===2000)?3 : (n===5000)?2 : 1;
+
+async function initWebGPU(){
+	if (!('gpu' in navigator)){
+		alert('WebGPU not supported. Use Chrome/Edge 113+ with WebGPU enabled.');
+		throw new Error('No WebGPU');
+	}
+	adapter = await navigator.gpu.requestAdapter();
+	if (!adapter) throw new Error('No GPU adapter');
+	try{
+		const maxX = adapter.limits?.maxComputeWorkgroupSizeX ?? 256;
+		WG_SIZE_JS = Math.min(256, Math.max(64, (maxX>=256?256:(maxX>=128?128:64))));
+	}catch{ WG_SIZE_JS = 256; }
+
+	device = await adapter.requestDevice();
+	queue = device.queue;
+	context = canvas.getContext('webgpu');
+	canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+	context.configure({ device, format: canvasFormat, alphaMode:'opaque' });
+
+	createBuffers();
+	await createPipelines();
+	await createParticleBuffers(n, true);
+
+	fitCanvas();
+	requestAnimationFrame(frame);
+}
+
+function createBuffers(){
+	simParamsBuf = device.createBuffer({ size:64, usage:GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+	renderParamsBuf = device.createBuffer({ size:32, usage:GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+	const quad = new Float32Array([
+		-0.5,-0.5,  0.5,-0.5,  0.5,0.5,
+		-0.5,-0.5,  0.5,0.5,  -0.5,0.5,
+	]);
+	quadVB = device.createBuffer({ size:quad.byteLength, usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST, mappedAtCreation:true });
+	new Float32Array(quadVB.getMappedRange()).set(quad);
+	quadVB.unmap();
+}
+
+async function createPipelines(){
+	const computeWGSL = `
+const WG_SIZE : u32 = ${WG_SIZE_JS}u;
+
+struct SimParams {
+	n: u32, pot: u32, _p0:u32, _p1:u32,
+	dt: f32, h: f32, damping: f32, lambda: f32,
+	_r0:f32, _r1:f32, _r2:f32, _r3:f32,
+	_r4:f32, _r5:f32, _r6:f32, _r7:f32,
+};
+
+@group(0) @binding(0) var<storage, read>  posIn : array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read>  velIn : array<vec2<f32>>;
+@group(0) @binding(2) var<storage, read_write> posOut: array<vec2<f32>>;
+@group(0) @binding(3) var<storage, read_write> velOut: array<vec2<f32>>;
+@group(0) @binding(4) var<uniform> params : SimParams;
+
+var<workgroup> tilePos: array<vec2<f32>, WG_SIZE>;
+
+// ∇(r^{2λ}) = 2λ r^{2λ-2} (x, y)
+fn grad_conf(x:f32,y:f32) -> vec2<f32>{
+	let r2 = x*x + y*y + 1e-12;
+	let s = 2.0 * params.lambda * pow(r2, params.lambda - 1.0);
+	return vec2<f32>(s*x, s*y);
+}
+
+@compute @workgroup_size(WG_SIZE)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+        @builtin(local_invocation_id)  lid: vec3<u32>){
+	let i = gid.x;
+	let N = params.n;
+
+	var px:f32 = 0.0; var py:f32 = 0.0;
+	var vx:f32 = 0.0; var vy:f32 = 0.0;
+
+	if (i < N){
+		px = posIn[i].x; py = posIn[i].y;
+		vx = velIn[i].x; vy = velIn[i].y;
+	}
+
+	var g = grad_conf(px, py);
+	var ax = -f32(N) * g.x;
+	var ay = -f32(N) * g.y;
+
+	var tileStart:u32 = 0u;
+	loop{
+		if (tileStart >= N){ break; }
+		let j = tileStart + lid.x;
+		if (j < N){ tilePos[lid.x] = posIn[j]; }
+		workgroupBarrier();
+
+		let cnt:u32 = min(WG_SIZE, N - tileStart);
+		var k:u32 = 0u;
+		loop{
+			if (k >= cnt){ break; }
+			let dx = tilePos[k].x - px;
+			let dy = tilePos[k].y - py;
+			let inv = 1.0 / (dx*dx + dy*dy + 1e-6);
+			let scale = 2.0 * inv;
+			if (tileStart + k != i){
+				ax -= dx * scale;
+				ay -= dy * scale;
+			}
+			k = k + 1u;
+		}
+		workgroupBarrier();
+		tileStart = tileStart + WG_SIZE;
+	}
+
+	if (i < N){
+		vx = vx + ax * params.dt;
+		vy = vy + ay * params.dt;
+		px = px + vx * params.dt;
+		py = py + vy * params.dt;
+		vx = vx * params.damping;
+		vy = vy * params.damping;
+
+		posOut[i] = vec2<f32>(px, py);
+		velOut[i] = vec2<f32>(vx, vy);
+	}
+}
+`;
+	const renderWGSL = `
+struct RenderParams {
+	simToClip:f32, particlePx:f32, canvasW:f32, canvasH:f32,
+	alpha:f32, _p0:f32, _p1:f32, _p2:f32,
+};
+
+@group(0) @binding(0) var<uniform> rp: RenderParams;
+
+struct VSOut {
+	@builtin(position) pos: vec4<f32>,
+};
+
+@vertex
+fn vs_main(@location(0) quad: vec2<f32>, @location(1) inst: vec2<f32>) -> VSOut{
+	var o:VSOut;
+	let base = vec2<f32>(inst.x * rp.simToClip, inst.y * rp.simToClip);
+	let off  = vec2<f32>( quad.x * rp.particlePx * 2.0 / rp.canvasW,
+	                     -quad.y * rp.particlePx * 2.0 / rp.canvasH );
+	o.pos = vec4<f32>(base + off, 0.0, 1.0);
+	return o;
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32>{
+	return vec4<f32>(1.0,1.0,1.0, rp.alpha);
+}
+`;
+
+	const cs = device.createShaderModule({ code: computeWGSL });
+	const rs = device.createShaderModule({ code: renderWGSL });
+
+	computePipeline = device.createComputePipeline({ layout:'auto', compute:{ module:cs, entryPoint:'main' }});
+	renderPipeline  = device.createRenderPipeline({
+		layout:'auto',
+		vertex:{
+			module:rs, entryPoint:'vs_main',
+			buffers:[
+				{ arrayStride: 8, stepMode:'vertex', attributes:[{ shaderLocation:0, offset:0, format:'float32x2' }] },
+				{ arrayStride: 8, stepMode:'instance', attributes:[{ shaderLocation:1, offset:0, format:'float32x2' }] },
+			]
+		},
+		fragment:{ module:rs, entryPoint:'fs_main', targets:[{
+			format:canvasFormat,
+			blend:{ color:{srcFactor:'src-alpha',dstFactor:'one-minus-src-alpha',operation:'add'},
+			        alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'} }
+		}]},
+		primitive:{ topology:'triangle-list' }
+	});
+
+	renderBG = device.createBindGroup({
+		layout: renderPipeline.getBindGroupLayout(0),
+		entries:[{ binding:0, resource:{ buffer:renderParamsBuf }}]
+	});
+}
+
+async function createParticleBuffers(N, randomize=false){
+	const bytes = N * 2 * 4;
+	posA = device.createBuffer({ size:bytes, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST });
+	posB = device.createBuffer({ size:bytes, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.VERTEX });
+	velA = device.createBuffer({ size:bytes, usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST });
+	velB = device.createBuffer({ size:bytes, usage:GPUBufferUsage.STORAGE });
+
+	if (randomize){
+		const pos = new Float32Array(N*2);
+		const vel = new Float32Array(N*2);
+		for (let i=0;i<N;i++){
+			pos[2*i+0] = (Math.random()-0.5)*2.4;
+			pos[2*i+1] = (Math.random()-0.5)*2.4;
+			vel[2*i+0] = 0; vel[2*i+1] = 0;
+		}
+		queue.writeBuffer(posA, 0, pos);
+		queue.writeBuffer(velA, 0, vel);
+	}
+
+	const layout = computePipeline.getBindGroupLayout(0);
+	computeBG = [
+		device.createBindGroup({ layout, entries:[
+			{ binding:0, resource:{ buffer:posA }},
+			{ binding:1, resource:{ buffer:velA }},
+			{ binding:2, resource:{ buffer:posB }},
+			{ binding:3, resource:{ buffer:velB }},
+			{ binding:4, resource:{ buffer:simParamsBuf }},
+		]}),
+		device.createBindGroup({ layout, entries:[
+			{ binding:0, resource:{ buffer:posB }},
+			{ binding:1, resource:{ buffer:velB }},
+			{ binding:2, resource:{ buffer:posA }},
+			{ binding:3, resource:{ buffer:velA }},
+			{ binding:4, resource:{ buffer:simParamsBuf }},
+		]}),
+	];
+	numGroups = Math.ceil(N / WG_SIZE_JS);
+	ping = 0;
+}
+
+/* ---------- Uniforms ---------- */
+function writeSimParams(){
+	lambda = updateLambdaFromAudio() || lambda;
+
+	const u32 = new Uint32Array(4);
+	u32[0] = n >>> 0; u32[1]=0; u32[2]=0; u32[3]=0;
+
+	const f32 = new Float32Array([
+		dt, 0.0, damping, lambda,
+		0,0,0,0, 0,0,0,0
+	]);
+
+	const buf = new ArrayBuffer(64);
+	new Uint32Array(buf, 0, 4).set(u32);
+	new Float32Array(buf, 16, 12).set(f32);
+	queue.writeBuffer(simParamsBuf, 0, buf);
+}
+
+function writeRenderParams(){
+	const f32 = new Float32Array([
+		simToClip, particlePx, canvas.width, canvas.height,
+		1.0, 0,0,0
+	]);
+	queue.writeBuffer(renderParamsBuf, 0, f32);
+}
+
+/* ---------- Frame ---------- */
+function renderPositionsBuffer(){ return (ping === 1) ? posB : posA; }
+
+function frame(){
+	const enc = device.createCommandEncoder();
+
+	writeSimParams();
+	writeRenderParams();
+
+	const cpass = enc.beginComputePass();
+	cpass.setPipeline(computePipeline);
+	for (let s=0; s<stepsPerFrame; s++){
+		cpass.setBindGroup(0, computeBG[ping]);
+		cpass.dispatchWorkgroups(numGroups);
+		ping ^= 1;
+	}
+	cpass.end();
+
+	const view = context.getCurrentTexture().createView();
+	const rpass = enc.beginRenderPass({
+		colorAttachments:[{ view, clearValue:{r:0.02,g:0.03,b:0.05,a:1}, loadOp:'clear', storeOp:'store' }]
+	});
+	rpass.setPipeline(renderPipeline);
+	rpass.setBindGroup(0, renderBG);
+	rpass.setVertexBuffer(0, quadVB);
+	rpass.setVertexBuffer(1, renderPositionsBuffer());
+	rpass.draw(6, n, 0, 0);
+	rpass.end();
+
+	queue.submit([enc.finish()]);
+	stats.textContent = `λ ${lambda.toFixed(2)} • n ${n.toLocaleString('en-US')}`;
+
+	requestAnimationFrame(frame);
+}
+
+/* ---------- Boot ---------- */
+setupAudio();
+fitCanvas();
+initWebGPU().catch(err => {
+	console.error(err);
+	alert('Failed to initialize WebGPU. Try Chrome/Edge with chrome://flags/#enable-unsafe-webgpu.');
+});
+</script>
+</body>
+</html>

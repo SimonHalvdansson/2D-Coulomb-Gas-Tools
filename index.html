@@ -337,7 +337,7 @@ self.addEventListener('message', function(e) {
     if (pot === 4)
       q += Math.pow(x * x + y * y, 3) - lemniscateT * 2 / Math.sqrt(3) * Math.pow(r, 3) * Math.cos(3 * theta);
     if (pot === 5)
-      q += Math.pow(x * x + y * y, 3) - lemniscateT * 2 / Math.sqrt(5) * Math.pow(r, 5) * Math.cos(5 * theta);
+      q += Math.pow(x * x + y * y, 5) - lemniscateT * 2 / Math.sqrt(5) * Math.pow(r, 5) * Math.cos(5 * theta);
     if (pot === 6)
       q += Math.pow(x * x + y * y, lemInterpol) - lemniscateT * 2 / Math.sqrt(lemInterpol) * Math.pow(r, lemInterpol) * Math.cos(lemInterpol * theta);
 

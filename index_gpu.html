@@ -375,8 +375,11 @@ function adjustLayout() {
     controlsPanel.style.maxHeight = Math.max(180, remaining) + 'px';
     controlsPanel.style.overflowY = 'auto';
   } else {
-  controlsPanel.style.maxHeight = 'leave'; // or leave '' to use the CSS rule
-  controlsPanel.style.overflowY = 'auto';
+    // reset inline overrides
+    controlsPanel.style.maxHeight = '';
+    controlsPanel.style.overflowY = '';
+    controlsPanel.style.width = '';
+    controlsPanel.style.maxWidth = '';
   }
 }
 
@@ -559,8 +562,7 @@ fn grad_conf(x: f32, y: f32) -> vec2<f32> {
     }
     // Mittag-Leffler λ=10: (x^2 + y^2)^10
     case 2u: {
-      let r8 = r4*r4;
-      let s = 20.0 * r8 * r2; // 20 * r2^9
+      let s = 20.0 * pow(r2, 9.0);
       gx = s * x;
       gy = s * y;
     }
@@ -580,13 +582,21 @@ fn grad_conf(x: f32, y: f32) -> vec2<f32> {
     // Lemniscate k=5
     case 5u: {
       let c = params.lemniscateT * 2.0 / sqrt(5.0);
+
+      // grad r^{10} = 10 * (r2)^4 * (x,y)
+      let s = 10.0 * pow(r2, 4.0);
+      let gxr = s * x;
+      let gyr = s * y;
+
+      // grad Re(z^5)
       let x2 = x*x; let y2 = y*y;
       let x3 = x2*x; let y3 = y2*y;
       let x4 = x2*x2; let y4 = y2*y2;
       let dPx = 5.0*x4 - 30.0*x2*y2 + 5.0*y4;
       let dPy = -20.0*x3*y + 20.0*x*y3;
-      gx = 6.0 * r4 * x - c * dPx;
-      gy = 6.0 * r4 * y - c * dPy;
+
+      gx = gxr - c * dPx;
+      gy = gyr - c * dPy;
     }
     // Interpolated lemniscate: analytic
     default: {

@@ -193,8 +193,8 @@ body.light #controls{ color-scheme: light; }
       <div class="section">
         <div class="header">What is this?</div>
         <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
-          <div>Each dot represents an electron experiencing pairwise Coulomb repulsion with every other electron while being confined by an external potential. The energy of a configuration $z_1, \dots, z_n$ is described by the 2D log-gas Hamiltonian
-            $$\mathcal{H}(z_1,\ldots,z_n) = -\sum_{i < j} \log\lvert z_i - z_j \rvert + \sum_{i=1}^n V(z_i).$$
+          <div>Each dot represents an electron experiencing pairwise Coulomb repulsion with every other electron while being confined by an external potential $Q$. The energy of a configuration $z_1, \dots, z_n$ is described by the 2D log-gas Hamiltonian
+            $$\mathcal{H}(z_1,\ldots,z_n) = -\sum_{i < j} \log\lvert z_i - z_j \rvert + \sum_{i=1}^n Q(z_i).$$
             The minimum-energy state is a <i>Fekete configuration</i>. For more on the background and context of these systems see my bachelor thesis below.</div>
           <a href="https://simonhalvdansson.github.io/bachelor_thesis.pdf" target="_blank" class="link-button">PDF</a>
         </div>
@@ -899,34 +899,37 @@ function updatePotentialEquation() {
   const T = lemniscateT.toFixed(2);
   switch (pot) {
     case 0:
-      html = 'Current potential: $V(z) = |z|^2$ (Ginibre ensemble).';
+      html = 'Current potential: $Q(z) = |z|^2$ (Ginibre ensemble).';
       break;
     case 1:
-      html = 'Current potential: $V(z) = |z|^4$ (Mittag-Leffler with $\\lambda = 2$).';
+      html = 'Current potential: $Q(z) = |z|^4$ (Mittag-Leffler with $\\lambda = 2$).';
       break;
-    case 2: {
-      html = 'Current potential: $V(z) = |z|^{20}$ (Mittag-Leffler with $\\lambda = 10$).';
+    case 2:
+      html = 'Current potential: $Q(z) = |z|^{20}$ (Mittag-Leffler with $\\lambda = 10$).';
       break;
-    }
     case 3: {
-      const tau = (lemniscateT * 2 / Math.sqrt(2)).toFixed(3);
-      html = `Current potential: $V(z) = |z|^4 - ${tau}\\,\\operatorname{Re}(z^2)$ with $T = ${T}$.`;
+      const tauExpr = '\\tfrac{2T}{\\sqrt{2}}';
+      const tauValue = (lemniscateT * 2 / Math.sqrt(2)).toFixed(3);
+      html = `Current potential: $Q(z) = |z|^4 - ${tauExpr}\\,\\operatorname{Re}(z^2)$ with $T = ${T}$, so ${tauExpr} = ${tauValue}.`;
       break;
     }
     case 4: {
-      const tau = (lemniscateT * 2 / Math.sqrt(3)).toFixed(3);
-      html = `Current potential: $V(z) = |z|^6 - ${tau}\\,\\operatorname{Re}(z^3)$ with $T = ${T}$.`;
+      const tauExpr = '\\tfrac{2T}{\\sqrt{3}}';
+      const tauValue = (lemniscateT * 2 / Math.sqrt(3)).toFixed(3);
+      html = `Current potential: $Q(z) = |z|^6 - ${tauExpr}\\,\\operatorname{Re}(z^3)$ with $T = ${T}$, so ${tauExpr} = ${tauValue}.`;
       break;
     }
     case 5: {
-      const tau = (lemniscateT * 2 / Math.sqrt(5)).toFixed(3);
-      html = `Current potential: $V(z) = |z|^{10} - ${tau}\\,\\operatorname{Re}(z^5)$ with $T = ${T}$.`;
+      const tauExpr = '\\tfrac{2T}{\\sqrt{5}}';
+      const tauValue = (lemniscateT * 2 / Math.sqrt(5)).toFixed(3);
+      html = `Current potential: $Q(z) = |z|^{10} - ${tauExpr}\\,\\operatorname{Re}(z^5)$ with $T = ${T}$, so ${tauExpr} = ${tauValue}.`;
       break;
     }
     default: {
       const pValue = lemInterpol.toFixed(2);
-      const alpha = (lemniscateT * 2 / Math.sqrt(Math.max(lemInterpol, 1e-6))).toFixed(3);
-      html = `Current potential: $V(z) = |z|^{2p} - ${alpha}\\,\\operatorname{Re}(z^{p})$ with $p = ${pValue}$ and $T = ${T}$.`;
+      const alphaExpr = '\\tfrac{2T}{\\sqrt{p}}';
+      const alphaValue = (lemniscateT * 2 / Math.sqrt(Math.max(lemInterpol, 1e-6))).toFixed(3);
+      html = `Current potential: $Q(z) = |z|^{2p} - ${alphaExpr}\\,\\operatorname{Re}(z^{p})$ with $p = ${pValue}$ and $T = ${T}$, so ${alphaExpr} = ${alphaValue}.`;
       break;
     }
   }
@@ -966,8 +969,9 @@ function clamp(value, min, max) {
 function setHoverInsertion(simX, simY) {
   const clampedX = clamp(simX, -1, 1);
   const clampedY = clamp(simY, -1, 1);
+  const flippedY = -clampedY;
   const axSlider = Math.round(clampedX * 50);
-  const aySlider = Math.round(clampedY * 50);
+  const aySlider = Math.round(flippedY * 50);
   if (rangeax.value !== String(axSlider)) {
     rangeax.value = String(axSlider);
   }

@@ -151,7 +151,16 @@ body.light #controls{ color-scheme: light; }
     .legend{ color: var(--muted); font-size: 13px; }
     .spaced{ letter-spacing: .01em; }
     .buttons-wrap{ display:flex; flex-wrap:wrap; gap:6px; }
+    .subheader{ font-weight:600; color:var(--text); margin:8px 0 6px; }
+    .option-row{ display:flex; align-items:center; gap:8px; }
   </style>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
 <div id="container">
@@ -184,23 +193,32 @@ body.light #controls{ color-scheme: light; }
       <div class="section">
         <div class="header">What is this?</div>
         <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
-          <div>Each dot represents an electron which experiences pariwise Couolmb repulsions with all other electrons. The collection of particles does not disperse due to the confining potential which explodes at infinite. The minimum energy configuration is known as a <i>Fekete configuration</i>. For more on the background and context of these systems see my bachelor thesis below.</div>
+          <div>Each dot represents an electron experiencing pairwise Coulomb repulsion with every other electron while being confined by an external potential. The energy of a configuration $z_1, \dots, z_n$ is described by the 2D log-gas Hamiltonian
+            $$\mathcal{H}(z_1,\ldots,z_n) = -\sum_{i < j} \log\lvert z_i - z_j \rvert + \sum_{i=1}^n V(z_i).$$
+            The minimum-energy state is a <i>Fekete configuration</i>. For more on the background and context of these systems see my bachelor thesis below.</div>
           <a href="https://simonhalvdansson.github.io/bachelor_thesis.pdf" target="_blank" class="link-button">PDF</a>
         </div>
       </div>
 
       <div class="section">
         <div class="header">Potential</div>
-        <div class="row toggle-group" id="pot-group" style="gap:6px;">
-          <button data-pot="0">Ginibre</button>
-        <button data-pot="1">Mittag-Leffler λ=2</button>
-        <button data-pot="2">Mittag-Leffler λ=10</button>
-        <button data-pot="3">Lemniscate k=2</button>
-        <button data-pot="4">Lemniscate k=3</button>
-        <button data-pot="5">Lemniscate k=5</button>
-        <button data-pot="6">Lemniscate (interpolated)</button>
+        <div id="potential-equation" class="legend" style="margin-bottom:6px;"></div>
+        <div id="pot-group">
+          <div class="subheader">Symmetric potentials</div>
+          <div class="row toggle-group" style="gap:6px; flex-wrap:wrap;">
+            <button data-pot="0">Ginibre</button>
+            <button data-pot="1">Mittag-Leffler λ=2</button>
+            <button data-pot="2">Mittag-Leffler λ=10</button>
+          </div>
+          <div class="subheader">Lemniscate potentials</div>
+          <div class="row toggle-group" style="gap:6px; flex-wrap:wrap;">
+            <button data-pot="3">Lemniscate k=2</button>
+            <button data-pot="4">Lemniscate k=3</button>
+            <button data-pot="5">Lemniscate k=5</button>
+            <button data-pot="6">Lemniscate (interpolated)</button>
+          </div>
+        </div>
       </div>
-    </div>
 
     <div class="section">
       <div class="header">Number of particles</div>
@@ -240,39 +258,42 @@ body.light #controls{ color-scheme: light; }
     </div>
 
     <div class="section">
-      <details>
-        <summary>Advanced ▸ Lemniscate & inserted scaling</summary>
-        <div class="inner">
-          <div class="kv">
-            <div>Critical scaling</div>
-            <input type="range" min="0" max="100" value="50" id="rangelem">
-          </div>
-          <div class="kv">
-            <div>Interpolation (Lemniscate)</div>
-            <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
-          </div>
-
-          <div class="header" style="margin-top:10px;">Inserted scaled settings</div>
-          <div class="kv">
-            <div>ca</div><input type="range" min="0" max="100" value="0" id="rangeca">
-          </div>
-          <div class="kv">
-            <div>ax</div><input type="range" min="-50" max="50" value="0" id="rangeax">
-          </div>
-          <div class="kv">
-            <div>ay</div><input type="range" min="-50" max="50" value="0" id="rangeay">
-          </div>
-          <div class="kv">
-            <div>cb</div><input type="range" min="0" max="100" value="0" id="rangecb">
-          </div>
-          <div class="kv">
-            <div>bx</div><input type="range" min="-50" max="50" value="0" id="rangebx">
-          </div>
-          <div class="kv">
-            <div>by</div><input type="range" min="-50" max="50" value="0" id="rangeby">
-          </div>
+      <div class="header">Lemniscate & inserted scaling</div>
+      <div class="controls-grid" style="gap:10px;">
+        <div class="kv">
+          <div>Critical scaling</div>
+          <input type="range" min="0" max="100" value="50" id="rangelem">
         </div>
-      </details>
+        <div class="kv">
+          <div>Interpolation (Lemniscate)</div>
+          <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
+        </div>
+
+        <div class="subheader">Inserted particle settings</div>
+        <div class="legend">Tune the strength $c$ and location $(x, y)$ of logarithmic insertions $-c\,\log|z - p|$ to pin particles at points $p_a$ and $p_b$ inside the droplet.</div>
+        <div class="kv">
+          <div>$c_{a}$</div><input type="range" min="0" max="100" value="0" id="rangeca">
+        </div>
+        <div class="kv">
+          <div>$a_{x}$</div><input type="range" min="-50" max="50" value="0" id="rangeax">
+        </div>
+        <div class="kv">
+          <div>$a_{y}$</div><input type="range" min="-50" max="50" value="0" id="rangeay">
+        </div>
+        <div class="kv">
+          <div>$c_{b}$</div><input type="range" min="0" max="100" value="0" id="rangecb">
+        </div>
+        <div class="kv">
+          <div>$b_{x}$</div><input type="range" min="-50" max="50" value="0" id="rangebx">
+        </div>
+        <div class="kv">
+          <div>$b_{y}$</div><input type="range" min="-50" max="50" value="0" id="rangeby">
+        </div>
+        <label class="option-row" style="margin-top:6px;">
+          <input type="checkbox" id="hover-insert-toggle">
+          <span>Use mouse hover to place $p_a$ when inside the canvas</span>
+        </label>
+      </div>
     </div>
   </div>
 </div>
@@ -282,6 +303,7 @@ body.light #controls{ color-scheme: light; }
 const canvas = document.getElementById('main-canvas');
 const controlsPanel = document.getElementById('controls');
 const potGroup = document.getElementById('pot-group');
+const potentialEquationEl = document.getElementById('potential-equation');
 const nGroup = document.getElementById('n-group');
 const themeToggle = document.getElementById('theme-toggle');
 
@@ -297,8 +319,10 @@ const rangebx = document.getElementById('rangebx');
 const rangeby = document.getElementById('rangeby');
 const rangesize = document.getElementById('rangesize');
 const rangeopacity = document.getElementById('rangeopacity');
+const hoverInsertToggle = document.getElementById('hover-insert-toggle');
 
 const counterEl = document.getElementById('counter');
+const pendingMathElements = new Set();
 
 /* ===== Sim state ===== */
 let n = 20000;                       // default 20k
@@ -312,6 +336,9 @@ let pot = 0;
 let lemniscateT = parseFloat(rangelem.value)/50.0;
 let lemInterpol = parseFloat(rangeleminterpol.value)/10.0;
 let ca = 0, cb = 0, ax = 0, ay = 0, bx = 0, by = 0;
+let hoverInsertEnabled = false;
+let mouseInsideCanvas = false;
+let hoverOverrideActive = false;
 
 const h = 1e-4; // still used only if needed elsewhere
 const damping = 0.8;
@@ -842,12 +869,132 @@ async function frame() {
 
   // Keep per-frame counter update
   frameCounter++;
-  counterEl.textContent = frameCounter.toString();
+  counterEl.textContent = frameCounter.toLocaleString('en-US');
 
   requestAnimationFrame(frame);
 }
 
 /* ===== Helpers & UI ===== */
+function requestTypeset(el) {
+  if (!el) return;
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise([el]);
+  } else {
+    pendingMathElements.add(el);
+  }
+}
+
+function flushPendingMath() {
+  if (!pendingMathElements.size) return;
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise(Array.from(pendingMathElements));
+    pendingMathElements.clear();
+  }
+}
+
+function isLemniscatePot(p) { return p >= 3; }
+
+function updatePotentialEquation() {
+  let html = '';
+  const T = lemniscateT.toFixed(2);
+  switch (pot) {
+    case 0:
+      html = 'Current potential: $V(z) = |z|^2$ (Ginibre ensemble).';
+      break;
+    case 1:
+      html = 'Current potential: $V(z) = |z|^4$ (Mittag-Leffler with $\\lambda = 2$).';
+      break;
+    case 2: {
+      html = 'Current potential: $V(z) = |z|^{20}$ (Mittag-Leffler with $\\lambda = 10$).';
+      break;
+    }
+    case 3: {
+      const tau = (lemniscateT * 2 / Math.sqrt(2)).toFixed(3);
+      html = `Current potential: $V(z) = |z|^4 - ${tau}\\,\\operatorname{Re}(z^2)$ with $T = ${T}$.`;
+      break;
+    }
+    case 4: {
+      const tau = (lemniscateT * 2 / Math.sqrt(3)).toFixed(3);
+      html = `Current potential: $V(z) = |z|^6 - ${tau}\\,\\operatorname{Re}(z^3)$ with $T = ${T}$.`;
+      break;
+    }
+    case 5: {
+      const tau = (lemniscateT * 2 / Math.sqrt(5)).toFixed(3);
+      html = `Current potential: $V(z) = |z|^{10} - ${tau}\\,\\operatorname{Re}(z^5)$ with $T = ${T}$.`;
+      break;
+    }
+    default: {
+      const pValue = lemInterpol.toFixed(2);
+      const alpha = (lemniscateT * 2 / Math.sqrt(Math.max(lemInterpol, 1e-6))).toFixed(3);
+      html = `Current potential: $V(z) = |z|^{2p} - ${alpha}\\,\\operatorname{Re}(z^{p})$ with $p = ${pValue}$ and $T = ${T}$.`;
+      break;
+    }
+  }
+  potentialEquationEl.innerHTML = html;
+  requestTypeset(potentialEquationEl);
+}
+
+function updateLemniscateControls() {
+  const isLemn = isLemniscatePot(pot);
+  rangelem.disabled = !isLemn;
+  rangeleminterpol.disabled = pot !== 6;
+}
+
+function updateInsertedControlAvailability() {
+  const enableA = parseFloat(rangeca.value) > 0;
+  rangeax.disabled = !enableA;
+  rangeay.disabled = !enableA;
+  const enableB = parseFloat(rangecb.value) > 0;
+  rangebx.disabled = !enableB;
+  rangeby.disabled = !enableB;
+}
+
+function restoreAFromSlider() {
+  const targetAx = parseFloat(rangeax.value) / 50.0;
+  const targetAy = parseFloat(rangeay.value) / 50.0;
+  if (ax !== targetAx || ay !== targetAy) {
+    ax = targetAx;
+    ay = targetAy;
+    markSimDirty();
+  }
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function setHoverInsertion(simX, simY) {
+  const clampedX = clamp(simX, -1, 1);
+  const clampedY = clamp(simY, -1, 1);
+  const axSlider = Math.round(clampedX * 50);
+  const aySlider = Math.round(clampedY * 50);
+  if (rangeax.value !== String(axSlider)) {
+    rangeax.value = String(axSlider);
+  }
+  if (rangeay.value !== String(aySlider)) {
+    rangeay.value = String(aySlider);
+  }
+  const nextAx = axSlider / 50.0;
+  const nextAy = aySlider / 50.0;
+  if (ax !== nextAx || ay !== nextAy) {
+    ax = nextAx;
+    ay = nextAy;
+    markSimDirty();
+  }
+}
+
+function canvasEventToSimCoords(evt) {
+  const rect = canvas.getBoundingClientRect();
+  const xNorm = (evt.clientX - rect.left) / rect.width;
+  const yNorm = (evt.clientY - rect.top) / rect.height;
+  const clipX = xNorm * 2 - 1;
+  const clipY = 1 - yNorm * 2;
+  return {
+    x: clipX / simToClip,
+    y: clipY / simToClip,
+  };
+}
+
 function defaultRadiusForN(N){
   if (N <= 500) return 4;
   if (N === 1000 || N === 2000) return 3;
@@ -878,7 +1025,16 @@ nGroup.addEventListener('click', (e) => {
   setActiveButtons();
 });
 
-function setPot(p){ pot = p; markSimDirty(); }
+function setPot(p){
+  if (pot !== p) {
+    pot = p;
+    markSimDirty();
+  } else {
+    pot = p;
+  }
+  updatePotentialEquation();
+  updateLemniscateControls();
+}
 function setParticleSize(px){
   particleSizePx = px;
   rangesize.value = String(px);
@@ -890,6 +1046,10 @@ function setOpacity(a){
 }
 
 function setN(N){
+  if (N >= 10000) {
+    setPot(0);
+  }
+
   n = N;
 
   // Auto radius per your rules
@@ -905,7 +1065,7 @@ function setN(N){
   createParticleBuffers(n, true);
   ping = 0;
   frameCounter = 0;
-  counterEl.textContent = '0';
+  counterEl.textContent = frameCounter.toLocaleString('en-US');
 
   markRenderDirty();
   markSimDirty();
@@ -917,13 +1077,39 @@ function setN(N){
 rangejumps.oninput = () => { steps = parseInt(rangejumps.value, 10); };
 rangedt.oninput    = () => { dt = parseFloat(rangedt.value)/30000.0; markSimDirty(); };
 
-rangelem.oninput = () => { lemniscateT = parseFloat(rangelem.value)/50.0; markSimDirty(); };
-rangeleminterpol.oninput = () => { lemInterpol = parseFloat(rangeleminterpol.value)/10.0; markSimDirty(); };
+rangelem.oninput = () => {
+  lemniscateT = parseFloat(rangelem.value)/50.0;
+  markSimDirty();
+  if (isLemniscatePot(pot)) updatePotentialEquation();
+};
+rangeleminterpol.oninput = () => {
+  lemInterpol = parseFloat(rangeleminterpol.value)/10.0;
+  markSimDirty();
+  if (pot === 6) updatePotentialEquation();
+};
 
-rangeca.oninput = () => { ca = parseFloat(rangeca.value)/100.0; markSimDirty(); };
-rangeax.oninput = () => { ax = parseFloat(rangeax.value)/50.0; markSimDirty(); };
-rangeay.oninput = () => { ay = parseFloat(rangeay.value)/50.0; markSimDirty(); };
-rangecb.oninput = () => { cb = parseFloat(rangecb.value)/100.0; markSimDirty(); };
+rangeca.oninput = () => {
+  ca = parseFloat(rangeca.value)/100.0;
+  updateInsertedControlAvailability();
+  markSimDirty();
+};
+rangeax.oninput = () => {
+  if (!hoverOverrideActive) {
+    ax = parseFloat(rangeax.value)/50.0;
+    markSimDirty();
+  }
+};
+rangeay.oninput = () => {
+  if (!hoverOverrideActive) {
+    ay = parseFloat(rangeay.value)/50.0;
+    markSimDirty();
+  }
+};
+rangecb.oninput = () => {
+  cb = parseFloat(rangecb.value)/100.0;
+  updateInsertedControlAvailability();
+  markSimDirty();
+};
 rangebx.oninput = () => { bx = parseFloat(rangebx.value)/50.0; markSimDirty(); };
 rangeby.oninput = () => { by = parseFloat(rangeby.value)/50.0; markSimDirty(); };
 
@@ -934,6 +1120,51 @@ themeToggle.addEventListener('change', () => {
   isDark = themeToggle.checked;
   document.body.classList.toggle('light', !isDark);
   markRenderDirty();
+});
+
+hoverInsertToggle.addEventListener('change', () => {
+  hoverInsertEnabled = hoverInsertToggle.checked;
+  if (!hoverInsertEnabled) {
+    hoverOverrideActive = false;
+    restoreAFromSlider();
+  } else if (mouseInsideCanvas) {
+    hoverOverrideActive = true;
+  }
+});
+
+canvas.addEventListener('mouseenter', () => {
+  mouseInsideCanvas = true;
+  if (hoverInsertEnabled) hoverOverrideActive = true;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  mouseInsideCanvas = false;
+  if (hoverInsertEnabled) {
+    hoverOverrideActive = false;
+    restoreAFromSlider();
+  }
+});
+
+canvas.addEventListener('mousemove', (evt) => {
+  if (!hoverInsertEnabled) return;
+  mouseInsideCanvas = true;
+  const { x, y } = canvasEventToSimCoords(evt);
+  hoverOverrideActive = true;
+  setHoverInsertion(x, y);
+});
+
+requestTypeset(controlsPanel);
+updatePotentialEquation();
+updateLemniscateControls();
+updateInsertedControlAvailability();
+restoreAFromSlider();
+
+window.addEventListener('load', () => {
+  if (window.MathJax?.startup?.promise) {
+    MathJax.startup.promise.then(() => flushPendingMath());
+  } else {
+    flushPendingMath();
+  }
 });
 
 /* ===== Kickoff ===== */

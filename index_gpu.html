@@ -34,7 +34,7 @@
     body{
       margin:0; padding:0;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size:16px; color:var(--text); background:var(--bg);
+      font-size:15px; color:var(--text); background:var(--bg);
     }
 
     /* ---------- Layout ---------- */
@@ -56,6 +56,30 @@
       width: 900px;
       height: 900px;
     }
+    #canvas-wrap{
+      position: relative;
+      width: fit-content;
+      height: fit-content;
+    }
+    #frame-counter{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 2;
+      pointer-events: none;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(15, 17, 21, 0.82);
+      color: #e9eef5;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      backdrop-filter: blur(4px);
+    }
+    body.light #frame-counter{
+      background: rgba(255, 255, 255, 0.86);
+      color: #162033;
+    }
     #controls{
       background: var(--panel);
       border:1px solid var(--border);
@@ -65,7 +89,7 @@
       padding-right:16px;
       padding-top:12px;
       position: relative;
-      max-width: 520px;
+      max-width: 500px;
       max-height: calc(100vh - 24px);
       overflow-y: auto;
       overflow-x: hidden;
@@ -112,14 +136,14 @@ body:not(.light) #controls{ color-scheme: dark; }
 body.light #controls{ color-scheme: light; }
 
     /* Compact controls when the panel gets narrow */
-    #controls.compact { font-size:14px; }
+    #controls.compact { font-size:13px; }
     #controls.compact .kv { grid-template-columns: 140px 1fr; }
     #controls.compact button { padding:7px 9px; }
 
     /* ---------- UI atoms ---------- */
     .section{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--border); }
     .section:last-child{ border-bottom:none; margin-bottom:0; }
-    .header{ font-weight:700; color: var(--muted); letter-spacing:.02em;}
+    .header{ font-weight:700; color: var(--muted); letter-spacing:.02em; margin-bottom: 5px}
     .row{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
     .stat{ font-variant-numeric: tabular-nums; color: var(--stat); }
     button, .link-button{
@@ -143,7 +167,7 @@ body.light #controls{ color-scheme: light; }
     input[type="range"]{ width:100%; min-width:260px; accent-color: var(--accent); }
     #theme-toggle{ accent-color: var(--accent); }
     .kv{ display:grid; grid-template-columns: 160px 1fr; align-items:center; gap:8px 12px; }
-    .kv-small{ display:grid; grid-template-columns: 120px 1fr; align-items:center; gap:8px 12px; }
+    .kv-small{ display:grid; grid-template-columns: 150px 1fr; align-items:center; gap:8px 12px; }
     .controls-grid{ display:grid; grid-template-columns: 1fr; gap:10px; }
     details{ border:1px solid var(--border); border-radius:10px; overflow:hidden; }
     summary{ list-style:none; cursor:pointer; padding:10px 12px; background:#1a2030; color:#cfd7e5; }
@@ -200,7 +224,7 @@ body.light #controls{ color-scheme: light; }
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      font-size:16px;
+      font-size:15px;
       line-height:1;
     }
   </style>
@@ -214,7 +238,10 @@ body.light #controls{ color-scheme: light; }
 </head>
 <body>
 <div id="container">
-  <canvas id="main-canvas" width="900" height="900"></canvas>
+  <div id="canvas-wrap">
+    <canvas id="main-canvas" width="900" height="900"></canvas>
+    <div id="frame-counter">Frames: <span id="counter" class="stat">0</span></div>
+  </div>
 
   <div id="controls">
     <div class="section">
@@ -234,9 +261,6 @@ body.light #controls{ color-scheme: light; }
           <div>Δt</div>
           <input type="range" min="1" max="40" value="5" id="rangedt">
         </div>
-          <div class="row" style="justify-content: flex-start; gap:24px;">
-            <div>Frames: <span id="counter" class="stat">0</span></div>
-          </div>
         </div>
       </div>
 
@@ -265,6 +289,16 @@ body.light #controls{ color-scheme: light; }
             <button data-pot="4">Lemniscate k=3</button>
             <button data-pot="5">Lemniscate k=5</button>
             <button data-pot="6">Lemniscate (interpolated)</button>
+          </div>
+          <div id="lemniscate-interpol-controls" class="controls-grid" style="gap:10px; margin-top:10px; display:none;">
+            <div class="kv">
+              <div>Critical scaling</div>
+              <input type="range" min="0" max="100" value="50" id="rangelem">
+            </div>
+            <div class="kv">
+              <div>Interpolation (Lemniscate)</div>
+              <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
+            </div>
           </div>
         </div>
       </div>
@@ -301,24 +335,14 @@ body.light #controls{ color-scheme: light; }
         </div>
         <div class="kv-small" style="flex:1 1 260px;">
           <div>Particle opacity</div>
-          <input type="range" min="0.1" max="1.0" step="0.05" value="1.0" id="rangeopacity">
+          <input type="range" min="0.1" max="1.0" step="0.01" value="1.0" id="rangeopacity">
         </div>
       </div>
     </div>
 
     <div class="section">
-      <div class="header">Lemniscate & inserted scaling</div>
+      <div class="header">Inserted particle settings</div>
       <div class="controls-grid" style="gap:10px;">
-        <div class="kv">
-          <div>Critical scaling</div>
-          <input type="range" min="0" max="100" value="50" id="rangelem">
-        </div>
-        <div class="kv">
-          <div>Interpolation (Lemniscate)</div>
-          <input type="range" min="10" max="50" value="25" id="rangeleminterpol">
-        </div>
-
-        <div class="subheader">Inserted particle settings</div>
         <div class="legend">Each insertion adds a term $-c\,\log|z-p|$. Add points, tune their charge, and place them directly on the canvas.</div>
         <div id="inserted-list" class="inserted-list"></div>
         <button type="button" id="add-inserted-btn">+ Add particle</button>
@@ -332,6 +356,7 @@ body.light #controls{ color-scheme: light; }
 const canvas = document.getElementById('main-canvas');
 const controlsPanel = document.getElementById('controls');
 const potGroup = document.getElementById('pot-group');
+const lemniscateInterpolControlsEl = document.getElementById('lemniscate-interpol-controls');
 const potentialEquationEl = document.getElementById('potential-equation');
 const nGroup = document.getElementById('n-group');
 const themeToggle = document.getElementById('theme-toggle');
@@ -1026,9 +1051,10 @@ function updatePotentialEquation() {
 }
 
 function updateLemniscateControls() {
-  const isLemn = isLemniscatePot(pot);
-  rangelem.disabled = !isLemn;
-  rangeleminterpol.disabled = pot !== 6;
+  const isInterpolated = pot === 6;
+  lemniscateInterpolControlsEl.style.display = isInterpolated ? 'grid' : 'none';
+  rangelem.disabled = !isInterpolated;
+  rangeleminterpol.disabled = !isInterpolated;
 }
 
 function clamp(value, min, max) {

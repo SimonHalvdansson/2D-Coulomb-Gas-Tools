@@ -60,7 +60,10 @@
       background: var(--panel);
       border:1px solid var(--border);
       border-radius:12px;
-      padding:16px;
+      padding-bottom:16px;
+      padding-left:16px;
+      padding-right:16px;
+      padding-top:12px;
       position: relative;
       max-width: 520px;
       max-height: calc(100vh - 24px);
@@ -116,7 +119,7 @@ body.light #controls{ color-scheme: light; }
     /* ---------- UI atoms ---------- */
     .section{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--border); }
     .section:last-child{ border-bottom:none; margin-bottom:0; }
-    .header{ font-weight:700; color: var(--muted); letter-spacing:.02em; margin-bottom:8px; }
+    .header{ font-weight:700; color: var(--muted); letter-spacing:.02em;}
     .row{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
     .stat{ font-variant-numeric: tabular-nums; color: var(--stat); }
     button, .link-button{
@@ -367,20 +370,23 @@ function isPortrait() { return window.innerHeight > window.innerWidth; }
 function resizeCanvasSquare() {
   const gap = 16;
   const pad = 24;
+  const viewportW = document.documentElement.clientWidth;
+  const viewportH = document.documentElement.clientHeight;
   let size;
 
   if (isPortrait()) {
     document.body.classList.add('portrait');
-    const maxW = Math.max(300, window.innerWidth - pad*2);
-    const maxH = Math.max(300, window.innerHeight - pad*2 - 200);
+    const maxW = Math.max(300, viewportW - pad*2);
+    const maxH = Math.max(300, viewportH - pad*2 - 200);
     size = Math.max(300, Math.min(maxW, maxH));
   } else {
     document.body.classList.remove('portrait');
-    const controlsW = controlsPanel.getBoundingClientRect().width || 420;
-    const maxW = Math.max(300, window.innerWidth - controlsW - gap - pad*2);
-    const maxH = Math.max(300, window.innerHeight - pad*2);
+    const controlsW = controlsPanel.offsetWidth || Math.ceil(controlsPanel.getBoundingClientRect().width) || 420;
+    const maxW = Math.max(300, viewportW - controlsW - gap - pad*2);
+    const maxH = Math.max(300, viewportH - pad*2);
     size = Math.max(300, Math.min(maxW, maxH));
   }
+  size = Math.floor(size);
 
   canvas.style.width = size + 'px';
   canvas.style.height = size + 'px';
@@ -389,6 +395,7 @@ function resizeCanvasSquare() {
     canvas.height = size;
     markRenderDirty();
   }
+  return size;
 }
 
 function adjustLayout() {
@@ -409,7 +416,26 @@ function adjustLayout() {
   }
 }
 
-window.addEventListener('resize', () => { resizeCanvasSquare(); adjustLayout(); });
+function syncResponsiveLayout(maxPasses = 3) {
+  let prevSize = -1;
+  for (let i = 0; i < maxPasses; i++) {
+    const nextSize = resizeCanvasSquare();
+    adjustLayout();
+    if (nextSize === prevSize) break;
+    prevSize = nextSize;
+  }
+}
+
+let resizeRaf = 0;
+function scheduleResponsiveLayout(maxPasses = 3) {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    syncResponsiveLayout(maxPasses);
+  });
+}
+
+window.addEventListener('resize', () => { scheduleResponsiveLayout(4); });
 
 /* ===== WebGPU setup ===== */
 async function initWebGPU() {
@@ -444,8 +470,7 @@ async function initWebGPU() {
   rangesize.value = String(particleSizePx);
   setActiveButtons();
 
-  resizeCanvasSquare();
-  adjustLayout();
+  syncResponsiveLayout(4);
   requestAnimationFrame(frame);
 }
 
@@ -1073,8 +1098,7 @@ function setN(N){
   markRenderDirty();
   markSimDirty();
 
-  resizeCanvasSquare();
-  adjustLayout();
+  syncResponsiveLayout(4);
 }
 
 rangejumps.oninput = () => { steps = parseInt(rangejumps.value, 10); };
@@ -1164,10 +1188,15 @@ restoreAFromSlider();
 
 window.addEventListener('load', () => {
   if (window.MathJax?.startup?.promise) {
-    MathJax.startup.promise.then(() => flushPendingMath());
+    MathJax.startup.promise.then(() => {
+      flushPendingMath();
+      scheduleResponsiveLayout(6);
+    });
   } else {
     flushPendingMath();
+    scheduleResponsiveLayout(6);
   }
+  scheduleResponsiveLayout(6);
 });
 
 /* ===== Kickoff ===== */

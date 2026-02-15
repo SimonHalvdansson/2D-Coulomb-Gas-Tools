@@ -144,6 +144,42 @@ body.light #controls{ color-scheme: light; }
     .section{ margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--border); }
     .section:last-child{ border-bottom:none; margin-bottom:0; }
     .header{ font-weight:700; color: var(--muted); letter-spacing:.02em; margin-bottom: 5px}
+    .section-header-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .section-toggle-btn{
+      margin-left:auto;
+      width:28px;
+      height:28px;
+      min-width:28px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height:1;
+      font-size:13px;
+    }
+    .section-toggle-btn .caret{
+      display:inline-block;
+      transition: transform 150ms ease;
+      transform-origin: center;
+    }
+    .section-toggle-btn[aria-expanded="false"] .caret{
+      transform: rotate(-90deg);
+    }
+    .collapsible-content{
+      overflow:hidden;
+      transition: height 220ms ease, opacity 180ms ease;
+      opacity:1;
+    }
+    .collapsible-content.is-collapsed{
+      opacity:0;
+      pointer-events:none;
+    }
+    .about-text-sm{ font-size: calc(1em - 2px); }
     .row{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
     .stat{ font-variant-numeric: tabular-nums; color: var(--stat); }
     button, .link-button{
@@ -265,11 +301,34 @@ body.light #controls{ color-scheme: light; }
       </div>
 
       <div class="section">
-        <div class="header">What is this?</div>
-        <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
-          <div>Each dot represents an electron experiencing pairwise Coulomb repulsion with every other electron while being confined by an external potential $Q$. The energy of a configuration $z_1, \dots, z_n$ is described by the 2D log-gas Hamiltonian
+        <div class="section-header-row">
+          <div class="header">What is this?</div>
+          <button
+            type="button"
+            id="what-is-this-toggle"
+            class="section-toggle-btn"
+            aria-expanded="true"
+            aria-controls="what-is-this-content"
+            title="Hide section"
+          >
+            <span class="caret">▾</span>
+          </button>
+        </div>
+        <div id="what-is-this-content" class="row collapsible-content" style="flex-direction:column; align-items:flex-start; gap:8px;">
+          <div class="about-text-sm">  
+            Each dot represents an electron experiencing pairwise Coulomb repulsion with every other electron while being confined by an external potential $Q$. The energy of a configuration $z_1, \dots, z_n$ is given by the 2D log-gas Hamiltonian
             $$H(z_1,\ldots,z_n) = -\sum_{i \neq j} \log\lvert z_i - z_j \rvert + n\sum_{j=1}^n Q(z_j).$$
-            The minimum-energy state is a <i>Fekete configuration</i>. For more on the background and context of these systems see my <a href="https://simonhalvdansson.github.io/bachelor_thesis.pdf">bachelor thesis</a> or this <a href="https://simonhalvdansson.github.io/posts/coulomb-gas/index.html">blog post</a>.</div>
+            The 2D Coulomb gas is interesting because this type of Hamiltonian shows up in many different places across mathematics / mathematical physics:
+            <ul>
+              <li>Eigenvalues of a random matrix with Gaussian random entries</li>
+              <li>Zeroes of a polynomial with Gaussian random coefficient</li>
+              <li>Fractional quantum hall effect</li>
+              <li>Hele-Shaw/Laplacian growth</li>
+              <li>Vortices in superconductors</li>
+            </ul>
+            Consequently, there is a large body of research devoted to deducing properties of this family of systems. For example, in 2017 in was <a href="https://arxiv.org/pdf/1710.06493">shown</a> that the density of particles near the boundary follows an <a href="https://en.wikipedia.org/wiki/Error_function">erfc</a> distribution by means of a remarkably long proof. Of course, with this simulator we minimize the Hamiltonion, not sample from it in a temperature dependent way. We therefore approximate the minimum-energy state which is known as a <i>Fekete configuration</i>.<br><br>
+
+             For more on the background and context of these systems, I implore you to look into my <a href="https://simonhalvdansson.github.io/bachelor_thesis.pdf">bachelor thesis</a> or this <a href="https://simonhalvdansson.github.io/posts/coulomb-gas/index.html">blog post</a>.</div>
         </div>
       </div>
 
@@ -360,6 +419,8 @@ const lemniscateInterpolControlsEl = document.getElementById('lemniscate-interpo
 const potentialEquationEl = document.getElementById('potential-equation');
 const nGroup = document.getElementById('n-group');
 const themeToggle = document.getElementById('theme-toggle');
+const whatIsThisToggle = document.getElementById('what-is-this-toggle');
+const whatIsThisContent = document.getElementById('what-is-this-content');
 
 const rangejumps = document.getElementById('rangejumps');
 const rangedt    = document.getElementById('rangedt');
@@ -1303,6 +1364,48 @@ themeToggle.addEventListener('change', () => {
   isDark = themeToggle.checked;
   document.body.classList.toggle('light', !isDark);
   markRenderDirty();
+});
+
+whatIsThisToggle.addEventListener('click', () => {
+  const expanded = whatIsThisToggle.getAttribute('aria-expanded') === 'true';
+  const nextExpanded = !expanded;
+  if (whatIsThisContent.dataset.animating === '1') return;
+
+  whatIsThisToggle.setAttribute('aria-expanded', String(nextExpanded));
+  whatIsThisToggle.title = nextExpanded ? 'Hide section' : 'Show section';
+
+  const startHeight = whatIsThisContent.getBoundingClientRect().height;
+  const endHeight = nextExpanded ? whatIsThisContent.scrollHeight : 0;
+
+  whatIsThisContent.dataset.animating = '1';
+  whatIsThisContent.classList.remove('is-collapsed');
+  whatIsThisContent.style.height = `${startHeight}px`;
+  whatIsThisContent.style.opacity = expanded ? '1' : '0';
+
+  requestAnimationFrame(() => {
+    whatIsThisContent.style.height = `${endHeight}px`;
+    whatIsThisContent.style.opacity = nextExpanded ? '1' : '0';
+  });
+
+  const onTransitionEnd = (evt) => {
+    if (evt.propertyName !== 'height') return;
+    whatIsThisContent.removeEventListener('transitionend', onTransitionEnd);
+    delete whatIsThisContent.dataset.animating;
+
+    if (nextExpanded) {
+      whatIsThisContent.style.height = 'auto';
+      whatIsThisContent.style.opacity = '1';
+      whatIsThisContent.classList.remove('is-collapsed');
+    } else {
+      whatIsThisContent.style.height = '0px';
+      whatIsThisContent.style.opacity = '0';
+      whatIsThisContent.classList.add('is-collapsed');
+    }
+
+    scheduleResponsiveLayout(2);
+  };
+
+  whatIsThisContent.addEventListener('transitionend', onTransitionEnd);
 });
 
 canvas.addEventListener('mousedown', (evt) => {

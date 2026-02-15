@@ -156,6 +156,53 @@ body.light #controls{ color-scheme: light; }
     .buttons-wrap{ display:flex; flex-wrap:wrap; gap:6px; }
     .subheader{ font-weight:600; color:var(--text); margin:8px 0 6px; }
     .option-row{ display:flex; align-items:center; gap:8px; }
+    .inserted-list{ display:flex; flex-direction:column; gap:8px; }
+    .inserted-item{
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px;
+      background:#121723;
+    }
+    body.light .inserted-item{ background:#fbfdff; }
+    .inserted-item.placing{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(79, 140, 255, 0.45);
+    }
+    .place-btn.placing{
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .place-btn{
+      font-size: 13px;
+    }
+    .inserted-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:6px;
+    }
+    .inserted-charge-row{
+      display:grid;
+      grid-template-columns:auto auto minmax(180px, 1fr);
+      gap:8px;
+      align-items:center;
+    }
+    .inserted-charge-row input[type="range"]{
+      min-width: 0;
+      width: 100%;
+    }
+    .remove-btn{
+      width:28px;
+      height:28px;
+      min-width:28px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:16px;
+      line-height:1;
+    }
   </style>
   <script>
     window.MathJax = {
@@ -272,29 +319,9 @@ body.light #controls{ color-scheme: light; }
         </div>
 
         <div class="subheader">Inserted particle settings</div>
-        <div class="legend">Tune the strength $c$ and location $(x, y)$ of logarithmic insertions $-c\,\log|z - p|$ to pin particles at points $p_a$ and $p_b$ inside the droplet.</div>
-        <div class="kv">
-          <div>$c_{a}$</div><input type="range" min="0" max="100" value="0" id="rangeca">
-        </div>
-        <div class="kv">
-          <div>$a_{x}$</div><input type="range" min="-50" max="50" value="0" id="rangeax">
-        </div>
-        <div class="kv">
-          <div>$a_{y}$</div><input type="range" min="-50" max="50" value="0" id="rangeay">
-        </div>
-        <div class="kv">
-          <div>$c_{b}$</div><input type="range" min="0" max="100" value="0" id="rangecb">
-        </div>
-        <div class="kv">
-          <div>$b_{x}$</div><input type="range" min="-50" max="50" value="0" id="rangebx">
-        </div>
-        <div class="kv">
-          <div>$b_{y}$</div><input type="range" min="-50" max="50" value="0" id="rangeby">
-        </div>
-        <label class="option-row" style="margin-top:6px;">
-          <input type="checkbox" id="hover-insert-toggle">
-          <span>Use mouse hover to place $p_a$ when inside the canvas</span>
-        </label>
+        <div class="legend">Each insertion adds a term $-c\,\log|z-p|$. Add points, tune their charge, and place them directly on the canvas.</div>
+        <div id="inserted-list" class="inserted-list"></div>
+        <button type="button" id="add-inserted-btn">+ Add particle</button>
       </div>
     </div>
   </div>
@@ -313,15 +340,10 @@ const rangejumps = document.getElementById('rangejumps');
 const rangedt    = document.getElementById('rangedt');
 const rangelem   = document.getElementById('rangelem');
 const rangeleminterpol = document.getElementById('rangeleminterpol');
-const rangeca = document.getElementById('rangeca');
-const rangeax = document.getElementById('rangeax');
-const rangeay = document.getElementById('rangeay');
-const rangecb = document.getElementById('rangecb');
-const rangebx = document.getElementById('rangebx');
-const rangeby = document.getElementById('rangeby');
 const rangesize = document.getElementById('rangesize');
 const rangeopacity = document.getElementById('rangeopacity');
-const hoverInsertToggle = document.getElementById('hover-insert-toggle');
+const insertedListEl = document.getElementById('inserted-list');
+const addInsertedBtn = document.getElementById('add-inserted-btn');
 
 const counterEl = document.getElementById('counter');
 const pendingMathElements = new Set();
@@ -337,10 +359,13 @@ let frameCounter = 0;
 let pot = 0;
 let lemniscateT = parseFloat(rangelem.value)/50.0;
 let lemInterpol = parseFloat(rangeleminterpol.value)/10.0;
-let ca = 0, cb = 0, ax = 0, ay = 0, bx = 0, by = 0;
-let hoverInsertEnabled = false;
-let mouseInsideCanvas = false;
-let hoverOverrideActive = false;
+const MAX_INSERTED_PARTICLES = 256;
+const INSERTED_CHARGE_SLIDER_MIN = 0;
+const INSERTED_CHARGE_SLIDER_MAX = 100;
+const INSERTED_CHARGE_DEFAULT_SLIDER = INSERTED_CHARGE_SLIDER_MAX / 4;
+let insertedParticles = [];
+let activePlacingIndex = -1;
+let placementDragging = false;
 
 const h = 1e-4; // still used only if needed elsewhere
 const damping = 0.8;
@@ -351,6 +376,7 @@ const simToClip = 0.7;
 let adapter, device, queue, context, canvasFormat;
 let computePipeline, renderPipeline;
 let simParamsBuf, renderParamsBuf, renderBindGroup;
+let insertedParticlesBuf;
 let posA, posB, velA, velB;
 let quadVB;
 let ping = 0;
@@ -363,6 +389,7 @@ let numGroups = 0;
 // dirty flags: avoid uniform writes unless changed
 let simDirty = true;
 let renderDirty = true;
+let insertedDirty = true;
 
 /* ---- Responsive & layout ---- */
 function isPortrait() { return window.innerHeight > window.innerWidth; }
@@ -461,6 +488,7 @@ async function initWebGPU() {
 
   createRenderParamsBuf();
   createSimParamsBuf();
+  createInsertedParticlesBuf();
   createQuadVB();
 
   await createPipelines();          // uses WG_SIZE_JS
@@ -500,6 +528,14 @@ function createSimParamsBuf() {
   simDirty = true;
 }
 
+function createInsertedParticlesBuf() {
+  insertedParticlesBuf = device.createBuffer({
+    size: MAX_INSERTED_PARTICLES * 16,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  });
+  insertedDirty = true;
+}
+
 function createRenderParamsBuf() {
   renderParamsBuf = device.createBuffer({
     size: 32,
@@ -510,19 +546,19 @@ function createRenderParamsBuf() {
 
 function markSimDirty(){ simDirty = true; }
 function markRenderDirty(){ renderDirty = true; }
+function markInsertedDirty(){ insertedDirty = true; simDirty = true; }
 
 function writeSimParams() {
   if (!simDirty) return;
   const u32 = new Uint32Array(4);
   u32[0] = n >>> 0;
   u32[1] = pot >>> 0;
-  u32[2] = 0;
+  u32[2] = Math.min(insertedParticles.length, MAX_INSERTED_PARTICLES) >>> 0;
   u32[3] = 0;
 
   const f32 = new Float32Array([
     dt, h, damping, lemniscateT,
-    lemInterpol, ca, cb, ax,
-    ay, bx, by, 0.0
+    lemInterpol, 0.0, 0.0, 0.0
   ]);
 
   const buf = new ArrayBuffer(u32.byteLength + f32.byteLength);
@@ -530,6 +566,21 @@ function writeSimParams() {
   new Float32Array(buf, u32.byteLength, f32.length).set(f32);
   queue.writeBuffer(simParamsBuf, 0, buf);
   simDirty = false;
+}
+
+function writeInsertedParticles() {
+  if (!insertedDirty) return;
+  const count = Math.min(insertedParticles.length, MAX_INSERTED_PARTICLES);
+  const packed = new Float32Array(MAX_INSERTED_PARTICLES * 4);
+  for (let i = 0; i < count; i++) {
+    const p = insertedParticles[i];
+    packed[4*i + 0] = p.x;
+    packed[4*i + 1] = p.y;
+    packed[4*i + 2] = p.c;
+    packed[4*i + 3] = 0.0;
+  }
+  queue.writeBuffer(insertedParticlesBuf, 0, packed);
+  insertedDirty = false;
 }
 
 function writeRenderParams() {
@@ -549,19 +600,23 @@ const WG_SIZE : u32 = ${WG_SIZE_JS}u;
 struct SimParams {
   n: u32,
   pot: u32,
-  _pad0: u32,
+  insertedCount: u32,
   _pad1: u32,
   dt: f32,
   h: f32,
   damping: f32,
   lemniscateT: f32,
   lemInterpol: f32,
-  ca: f32,
-  cb: f32,
-  ax: f32,
-  ay: f32,
-  bx: f32,
-  by: f32,
+  _padA: f32,
+  _padB: f32,
+  _padC: f32,
+};
+
+struct InsertedParticle {
+  x: f32,
+  y: f32,
+  c: f32,
+  _pad: f32,
 };
 
 @group(0) @binding(0) var<storage, read>  posIn : array<vec2<f32>>;
@@ -569,18 +624,24 @@ struct SimParams {
 @group(0) @binding(2) var<storage, read_write> posOut: array<vec2<f32>>;
 @group(0) @binding(3) var<storage, read_write> velOut: array<vec2<f32>>;
 @group(0) @binding(4) var<uniform> params : SimParams;
+@group(0) @binding(5) var<storage, read> insertedParticles: array<InsertedParticle>;
 
 /* -------- helper: analytic + hybrid confining gradient -------- */
 fn grad_logs(x: f32, y: f32) -> vec2<f32> {
-  let dx1 = x - params.ax;
-  let dy1 = y + params.ay;
-  let dx2 = x - params.bx;
-  let dy2 = y - params.by;
   let eps = 1e-6;
-  let d1 = dx1*dx1 + dy1*dy1 + eps;
-  let d2 = dx2*dx2 + dy2*dy2 + eps;
-  let gx = -params.ca * dx1 / d1 + -params.cb * dx2 / d2;
-  let gy = -params.ca * dy1 / d1 + -params.cb * dy2 / d2;
+  var gx: f32 = 0.0;
+  var gy: f32 = 0.0;
+  var i: u32 = 0u;
+  loop {
+    if (i >= params.insertedCount) { break; }
+    let p = insertedParticles[i];
+    let dx = x - p.x;
+    let dy = y - p.y;
+    let d = dx*dx + dy*dy + eps;
+    gx = gx - p.c * dx / d;
+    gy = gy - p.c * dy / d;
+    i = i + 1u;
+  }
   return vec2<f32>(gx, gy);
 }
 
@@ -844,6 +905,7 @@ async function createParticleBuffers(N, randomize=false) {
       { binding: 2, resource: { buffer: posB } },
       { binding: 3, resource: { buffer: velB } },
       { binding: 4, resource: { buffer: simParamsBuf } },
+      { binding: 5, resource: { buffer: insertedParticlesBuf } },
     ]}),
     device.createBindGroup({ layout, entries: [
       { binding: 0, resource: { buffer: posB } },
@@ -851,6 +913,7 @@ async function createParticleBuffers(N, randomize=false) {
       { binding: 2, resource: { buffer: posA } },
       { binding: 3, resource: { buffer: velA } },
       { binding: 4, resource: { buffer: simParamsBuf } },
+      { binding: 5, resource: { buffer: insertedParticlesBuf } },
     ]}),
   ];
   numGroups = Math.ceil(n / WG_SIZE_JS);
@@ -863,6 +926,7 @@ async function frame() {
   const encoder = device.createCommandEncoder();
 
   writeSimParams();
+  writeInsertedParticles();
   writeRenderParams();
 
   // Single compute pass with reused bind groups
@@ -967,48 +1031,96 @@ function updateLemniscateControls() {
   rangeleminterpol.disabled = pot !== 6;
 }
 
-function updateInsertedControlAvailability() {
-  const enableA = parseFloat(rangeca.value) > 0;
-  rangeax.disabled = !enableA;
-  rangeay.disabled = !enableA;
-  const enableB = parseFloat(rangecb.value) > 0;
-  rangebx.disabled = !enableB;
-  rangeby.disabled = !enableB;
-}
-
-function restoreAFromSlider() {
-  const targetAx = parseFloat(rangeax.value) / 50.0;
-  const targetAy = parseFloat(rangeay.value) / 50.0;
-  if (ax !== targetAx || ay !== targetAy) {
-    ax = targetAx;
-    ay = targetAy;
-    markSimDirty();
-  }
-}
-
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function setHoverInsertion(simX, simY) {
-  const clampedX = clamp(simX, -1, 1);
-  const clampedY = clamp(simY, -1, 1);
-  const flippedY = -clampedY;
-  const axSlider = Math.round(clampedX * 50);
-  const aySlider = Math.round(flippedY * 50);
-  if (rangeax.value !== String(axSlider)) {
-    rangeax.value = String(axSlider);
+function randomSimCoord() {
+  return Math.random() * 2 - 1;
+}
+
+function createInsertedParticle() {
+  return {
+    c: INSERTED_CHARGE_DEFAULT_SLIDER / INSERTED_CHARGE_SLIDER_MAX,
+    x: randomSimCoord(),
+    y: randomSimCoord(),
+  };
+}
+
+function formatSimCoord(v) {
+  const rounded = Math.abs(v) < 0.005 ? 0 : v;
+  return rounded.toFixed(2);
+}
+
+function placeButtonLabel(index) {
+  const p = insertedParticles[index];
+  if (!p) return 'Place';
+  return `Place (${formatSimCoord(p.x)}, ${formatSimCoord(p.y)})`;
+}
+
+function updatePlacementStatus() {
+  if (activePlacingIndex < 0 || !insertedParticles[activePlacingIndex]) {
+    canvas.style.cursor = '';
+    return;
   }
-  if (rangeay.value !== String(aySlider)) {
-    rangeay.value = String(aySlider);
+  canvas.style.cursor = placementDragging ? 'grabbing' : 'crosshair';
+}
+
+function renderInsertedParticleList() {
+  if (insertedParticles.length === 0) {
+    insertedListEl.innerHTML = '<div class="legend">No inserted particles. Add one below.</div>';
+  } else {
+    insertedListEl.innerHTML = insertedParticles.map((p, index) => `
+      <div class="inserted-item${index === activePlacingIndex ? ' placing' : ''}">
+        <div class="inserted-head">
+          <div class="legend">Inserted particle ${index + 1}</div>
+          <button type="button" class="remove-btn" data-role="remove" data-index="${index}" aria-label="Remove inserted particle ${index + 1}" title="Remove">×</button>
+        </div>
+        <div class="inserted-charge-row">
+          <button type="button" class="place-btn${index === activePlacingIndex ? ' placing' : ''}" data-role="place" data-index="${index}">${placeButtonLabel(index)}</button>
+          <div class="legend">Charge</div>
+          <input type="range" min="${INSERTED_CHARGE_SLIDER_MIN}" max="${INSERTED_CHARGE_SLIDER_MAX}" value="${Math.round(p.c * INSERTED_CHARGE_SLIDER_MAX)}" data-role="charge" data-index="${index}">
+        </div>
+      </div>
+    `).join('');
   }
-  const nextAx = axSlider / 50.0;
-  const nextAy = aySlider / 50.0;
-  if (ax !== nextAx || ay !== nextAy) {
-    ax = nextAx;
-    ay = nextAy;
-    markSimDirty();
+
+  const atMax = insertedParticles.length >= MAX_INSERTED_PARTICLES;
+  addInsertedBtn.disabled = atMax;
+  addInsertedBtn.textContent = atMax ? `Max ${MAX_INSERTED_PARTICLES} particles reached` : '+ Add particle';
+  updatePlacementStatus();
+}
+
+function setActivePlacingIndex(index) {
+  if (index < 0 || index >= insertedParticles.length) {
+    activePlacingIndex = -1;
+  } else {
+    activePlacingIndex = index;
   }
+  placementDragging = false;
+  renderInsertedParticleList();
+}
+
+function updateInsertedParticlePosition(index, simX, simY) {
+  if (index < 0 || index >= insertedParticles.length) return;
+  const p = insertedParticles[index];
+  const nextX = clamp(simX, -1, 1);
+  const nextY = clamp(simY, -1, 1);
+  if (Math.abs(nextX - p.x) < 1e-6 && Math.abs(nextY - p.y) < 1e-6) return;
+  p.x = nextX;
+  p.y = nextY;
+  markInsertedDirty();
+  const placeBtn = insertedListEl.querySelector(`button[data-role="place"][data-index="${index}"]`);
+  if (placeBtn) placeBtn.textContent = placeButtonLabel(index);
+  updatePlacementStatus();
+}
+
+function initializeInsertedParticlesUI() {
+  insertedParticles = [];
+  activePlacingIndex = -1;
+  placementDragging = false;
+  markInsertedDirty();
+  renderInsertedParticleList();
 }
 
 function canvasEventToSimCoords(evt) {
@@ -1115,30 +1227,48 @@ rangeleminterpol.oninput = () => {
   if (pot === 6) updatePotentialEquation();
 };
 
-rangeca.oninput = () => {
-  ca = parseFloat(rangeca.value)/100.0;
-  updateInsertedControlAvailability();
-  markSimDirty();
-};
-rangeax.oninput = () => {
-  if (!hoverOverrideActive) {
-    ax = parseFloat(rangeax.value)/50.0;
-    markSimDirty();
+addInsertedBtn.addEventListener('click', () => {
+  if (insertedParticles.length >= MAX_INSERTED_PARTICLES) return;
+  insertedParticles.push(createInsertedParticle());
+  markInsertedDirty();
+  setActivePlacingIndex(insertedParticles.length - 1);
+});
+
+insertedListEl.addEventListener('input', (evt) => {
+  const slider = evt.target.closest('input[data-role="charge"]');
+  if (!slider) return;
+  const index = parseInt(slider.dataset.index, 10);
+  if (!Number.isInteger(index) || !insertedParticles[index]) return;
+  insertedParticles[index].c = parseFloat(slider.value) / INSERTED_CHARGE_SLIDER_MAX;
+  markInsertedDirty();
+});
+
+insertedListEl.addEventListener('click', (evt) => {
+  const btn = evt.target.closest('button[data-role]');
+  if (!btn) return;
+  const index = parseInt(btn.dataset.index, 10);
+  if (!Number.isInteger(index)) return;
+
+  if (btn.dataset.role === 'place') {
+    setActivePlacingIndex(activePlacingIndex === index ? -1 : index);
+    return;
   }
-};
-rangeay.oninput = () => {
-  if (!hoverOverrideActive) {
-    ay = parseFloat(rangeay.value)/50.0;
-    markSimDirty();
+
+  if (btn.dataset.role === 'remove' && insertedParticles[index]) {
+    insertedParticles.splice(index, 1);
+    if (activePlacingIndex === index) activePlacingIndex = -1;
+    else if (activePlacingIndex > index) activePlacingIndex -= 1;
+    placementDragging = false;
+    markInsertedDirty();
+    renderInsertedParticleList();
   }
-};
-rangecb.oninput = () => {
-  cb = parseFloat(rangecb.value)/100.0;
-  updateInsertedControlAvailability();
-  markSimDirty();
-};
-rangebx.oninput = () => { bx = parseFloat(rangebx.value)/50.0; markSimDirty(); };
-rangeby.oninput = () => { by = parseFloat(rangeby.value)/50.0; markSimDirty(); };
+});
+
+function placeActiveParticleFromEvent(evt) {
+  if (activePlacingIndex < 0) return;
+  const { x, y } = canvasEventToSimCoords(evt);
+  updateInsertedParticlePosition(activePlacingIndex, x, y);
+}
 
 rangesize.oninput = () => { setParticleSize(parseInt(rangesize.value, 10)); };
 rangeopacity.oninput = () => { setOpacity(parseFloat(rangeopacity.value)); };
@@ -1149,42 +1279,35 @@ themeToggle.addEventListener('change', () => {
   markRenderDirty();
 });
 
-hoverInsertToggle.addEventListener('change', () => {
-  hoverInsertEnabled = hoverInsertToggle.checked;
-  if (!hoverInsertEnabled) {
-    hoverOverrideActive = false;
-    restoreAFromSlider();
-  } else if (mouseInsideCanvas) {
-    hoverOverrideActive = true;
+canvas.addEventListener('mousedown', (evt) => {
+  if (evt.button !== 0 || activePlacingIndex < 0) return;
+  placementDragging = true;
+  updatePlacementStatus();
+  placeActiveParticleFromEvent(evt);
+  evt.preventDefault();
+});
+
+window.addEventListener('mousemove', (evt) => {
+  if (!placementDragging || activePlacingIndex < 0) return;
+  placeActiveParticleFromEvent(evt);
+});
+
+window.addEventListener('mouseup', (evt) => {
+  if (evt.button === 0) {
+    placementDragging = false;
+    updatePlacementStatus();
   }
 });
 
-canvas.addEventListener('mouseenter', () => {
-  mouseInsideCanvas = true;
-  if (hoverInsertEnabled) hoverOverrideActive = true;
-});
-
-canvas.addEventListener('mouseleave', () => {
-  mouseInsideCanvas = false;
-  if (hoverInsertEnabled) {
-    hoverOverrideActive = false;
-    restoreAFromSlider();
-  }
-});
-
-canvas.addEventListener('mousemove', (evt) => {
-  if (!hoverInsertEnabled) return;
-  mouseInsideCanvas = true;
-  const { x, y } = canvasEventToSimCoords(evt);
-  hoverOverrideActive = true;
-  setHoverInsertion(x, y);
+canvas.addEventListener('click', (evt) => {
+  if (activePlacingIndex < 0) return;
+  placeActiveParticleFromEvent(evt);
 });
 
 requestTypeset(controlsPanel);
 updatePotentialEquation();
 updateLemniscateControls();
-updateInsertedControlAvailability();
-restoreAFromSlider();
+initializeInsertedParticlesUI();
 
 window.addEventListener('load', () => {
   if (window.MathJax?.startup?.promise) {

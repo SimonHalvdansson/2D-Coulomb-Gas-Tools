@@ -426,6 +426,7 @@ const rangejumps = document.getElementById('rangejumps');
 const rangedt    = document.getElementById('rangedt');
 const rangelem   = document.getElementById('rangelem');
 const rangeleminterpol = document.getElementById('rangeleminterpol');
+const lemniscateInterpolRowEl = rangeleminterpol.closest('.kv');
 const rangesize = document.getElementById('rangesize');
 const rangeopacity = document.getElementById('rangeopacity');
 const insertedListEl = document.getElementById('inserted-list');
@@ -1083,27 +1084,23 @@ function updatePotentialEquation() {
       break;
     case 3: {
       const tauExpr = '\\tfrac{2T}{\\sqrt{2}}';
-      const tauValue = (lemniscateT * 2 / Math.sqrt(2)).toFixed(3);
-      html = `Current potential: $Q(z) = |z|^4 - ${tauExpr}\\,\\operatorname{Re}(z^2)$ with $T = ${T}$, so $${tauExpr} = ${tauValue}$.`;
+      html = `Current potential: $Q(z) = |z|^4 - ${tauExpr}\\,\\operatorname{Re}(z^2)$ with $T = ${T}$.`;
       break;
     }
     case 4: {
       const tauExpr = '\\tfrac{2T}{\\sqrt{3}}';
-      const tauValue = (lemniscateT * 2 / Math.sqrt(3)).toFixed(3);
-      html = `Current potential: $Q(z) = |z|^6 - ${tauExpr}\\,\\operatorname{Re}(z^3)$ with $T = ${T}$, so $${tauExpr} = ${tauValue}$.`;
+      html = `Current potential: $Q(z) = |z|^6 - ${tauExpr}\\,\\operatorname{Re}(z^3)$ with $T = ${T}$.`;
       break;
     }
     case 5: {
       const tauExpr = '\\tfrac{2T}{\\sqrt{5}}';
-      const tauValue = (lemniscateT * 2 / Math.sqrt(5)).toFixed(3);
-      html = `Current potential: $Q(z) = |z|^{10} - ${tauExpr}\\,\\operatorname{Re}(z^5)$ with $T = ${T}$, so $${tauExpr} = ${tauValue}$.`;
+      html = `Current potential: $Q(z) = |z|^{10} - ${tauExpr}\\,\\operatorname{Re}(z^5)$ with $T = ${T}$.`;
       break;
     }
     default: {
       const pValue = lemInterpol.toFixed(2);
       const alphaExpr = '\\tfrac{2T}{\\sqrt{p}}';
-      const alphaValue = (lemniscateT * 2 / Math.sqrt(Math.max(lemInterpol, 1e-6))).toFixed(3);
-      html = `Current potential: $Q(z) = |z|^{2p} - ${alphaExpr}\\,\\operatorname{Re}(z^{p})$ with $p = ${pValue}$ and $T = ${T}$, so $${alphaExpr} = ${alphaValue}$.`;
+      html = `Current potential: $Q(z) = |z|^{2p} - ${alphaExpr}\\,\\operatorname{Re}(z^{p})$ with $p = ${pValue}$ and $T = ${T}$.`;
       break;
     }
   }
@@ -1112,9 +1109,13 @@ function updatePotentialEquation() {
 }
 
 function updateLemniscateControls() {
+  const isLemniscate = isLemniscatePot(pot);
   const isInterpolated = pot === 6;
-  lemniscateInterpolControlsEl.style.display = isInterpolated ? 'grid' : 'none';
-  rangelem.disabled = !isInterpolated;
+  lemniscateInterpolControlsEl.style.display = isLemniscate ? 'grid' : 'none';
+  if (lemniscateInterpolRowEl) {
+    lemniscateInterpolRowEl.style.display = isInterpolated ? 'grid' : 'none';
+  }
+  rangelem.disabled = !isLemniscate;
   rangeleminterpol.disabled = !isInterpolated;
 }
 

@@ -263,7 +263,7 @@
         </div>
         <div class="kv">
           <label for="rangedt">Δt</label>
-          <input type="range" min="1" max="40" value="5" id="rangedt" />
+          <input type="range" min="1" max="40" step="0.5" value="12.5" id="rangedt" />
         </div>
       </div>
     </div>
@@ -342,6 +342,7 @@
         <button data-n="10000">10&thinsp;000</button>
         <button data-n="20000">20&thinsp;000</button>
         <button data-n="50000">50&thinsp;000</button>
+        <button data-n="100000">100&thinsp;000</button>
       </div>
       <div class="legend" style="margin-top:6px;">Exact pairwise repulsion is O(n²); large values may be slow.</div>
     </section>
@@ -357,7 +358,7 @@
           </div>
         </div>
         <label class="row pill" style="width:fit-content; gap:6px;">
-          <input type="checkbox" id="outline-toggle" checked />
+          <input type="checkbox" id="outline-toggle" />
           <span>Show target outline</span>
         </label>
         <div id="potential-scale" class="potential-scale legend" hidden>
@@ -682,7 +683,7 @@ function drawShapeGuide() {
 }
 
 /* ===== Simulation state ===== */
-let n = 2000;
+let n = 10000;
 let steps = parseInt(rangejumps.value, 10);
 let dt = parseFloat(rangedt.value) / 30000;
 let particleSizePx = defaultRadiusForN(n);
@@ -691,7 +692,7 @@ let frameCounter = 0;
 const damping = .8;
 let isDark = true;
 let viewMode = 'particles';
-let showOutline = true;
+let showOutline = false;
 const simToClip = .7;
 
 /* ===== WebGPU ===== */

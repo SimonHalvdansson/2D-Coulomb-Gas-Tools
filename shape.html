@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Letter-shaped 2D Coulomb Gas (WebGPU)</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #151922;
+      --accent: #4f8cff;
+      --muted: #9aa4b2;
+      --text: #e9eef5;
+      --stat: #cdd6e3;
+      --btn: #262c36;
+      --btn-hover: #303846;
+      --border: #212735;
+      --canvas-border: #212735;
+      --gap: 16px;
+    }
+    body.light {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --accent: #2b6bff;
+      --muted: #556070;
+      --text: #0e1320;
+      --stat: #162033;
+      --btn: #e8ecf4;
+      --btn-hover: #dde3ee;
+      --border: #d8dee9;
+      --canvas-border: #cfd7e5;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 15px;
+    }
+    #container {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: auto auto;
+      grid-auto-rows: 1fr;
+      gap: var(--gap);
+      align-items: start;
+      justify-content: center;
+      padding: 12px;
+    }
+    #canvas-wrap {
+      position: relative;
+      width: fit-content;
+      height: fit-content;
+    }
+    #main-canvas,
+    #shape-guide {
+      display: block;
+      width: 900px;
+      height: 900px;
+      border-radius: 12px;
+    }
+    #main-canvas {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--canvas-border);
+      background: #fff;
+    }
+    #shape-guide {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #frame-counter,
+    #letter-badge {
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: #e9eef5;
+      background: rgba(15, 17, 21, 0.82);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      backdrop-filter: blur(4px);
+    }
+    #frame-counter { top: 10px; left: 10px; }
+    #letter-badge { top: 10px; right: 10px; }
+    body.light #frame-counter,
+    body.light #letter-badge {
+      color: #162033;
+      background: rgba(255, 255, 255, 0.86);
+    }
+    #controls {
+      position: relative;
+      max-width: 500px;
+      max-height: calc(100vh - 24px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 12px 16px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+      scrollbar-width: thin;
+      scrollbar-color: var(--btn-hover) transparent;
+      scrollbar-gutter: stable;
+    }
+    #controls::-webkit-scrollbar { width: 10px; }
+    #controls::-webkit-scrollbar-track { background: transparent; }
+    #controls::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: var(--btn);
+      background-clip: content-box;
+    }
+    #controls::-webkit-scrollbar-thumb:hover { background-color: var(--btn-hover); }
+    body:not(.light) #controls { color-scheme: dark; }
+    body.light #controls { color-scheme: light; }
+    body.portrait #container {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      justify-items: center;
+    }
+    body.portrait #controls {
+      width: min(760px, 96vw);
+      max-width: 96vw;
+    }
+    #controls.compact { font-size: 13px; }
+    #controls.compact .kv { grid-template-columns: 140px 1fr; }
+    #controls.compact button { padding: 7px 9px; }
+    .section {
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .section:last-child { margin-bottom: 0; border-bottom: 0; }
+    .header {
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    .section-header-row,
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-header-row { justify-content: space-between; }
+    .row { flex-wrap: wrap; }
+    .controls-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .kv { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 8px 12px; }
+    .kv-small { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 8px 12px; }
+    .numerical-select { width: 100%; min-width: 0; }
+    .buttons-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+    .legend { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .stat { color: var(--stat); font-variant-numeric: tabular-nums; }
+    .pill {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #1b2130;
+    }
+    body.light .pill { background: #f0f4fb; }
+    button,
+    select {
+      min-height: 34px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      background: var(--btn);
+      font: inherit;
+      transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+    button { cursor: pointer; }
+    button:hover { background: var(--btn-hover); }
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .toggle-group button.active {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+    .alphabet-grid {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(36px, 1fr));
+      gap: 6px;
+    }
+    .alphabet-grid button {
+      min-width: 0;
+      padding: 7px 4px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .view-mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .potential-scale {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .potential-scale[hidden] { display: none; }
+    .potential-scale-bar {
+      height: 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: linear-gradient(90deg, #0d1117, #264c9a, #4f8cff, #63d6c5, #f5d35b);
+    }
+    input[type="range"] { width: 100%; min-width: 260px; accent-color: var(--accent); }
+    #theme-toggle { accent-color: var(--accent); }
+    #shape-status[data-state="building"] { color: var(--accent); }
+    .precompute-progress { display: grid; gap: 6px; }
+    .precompute-progress[hidden] { display: none; }
+    .precompute-progress-label { display: flex; justify-content: space-between; gap: 12px; }
+    .precompute-progress progress { width: 100%; height: 10px; accent-color: var(--accent); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+<div id="container">
+  <div id="canvas-wrap">
+    <canvas id="main-canvas" width="900" height="900" aria-label="Animated letter-shaped Coulomb gas"></canvas>
+    <canvas id="shape-guide" width="900" height="900" aria-hidden="true"></canvas>
+    <div id="frame-counter">Frames: <span id="counter" class="stat">0</span></div>
+    <div id="letter-badge">Target: <span id="badge-letter" class="stat">A</span></div>
+  </div>
+
+  <main id="controls">
+    <div class="section">
+      <div class="row" style="justify-content:space-between;">
+        <div class="header">Letter-shaped Coulomb Gas</div>
+        <label class="row pill" style="gap:6px;">
+          <input type="checkbox" id="theme-toggle" checked />
+          <span>Dark mode</span>
+        </label>
+      </div>
+      <div class="controls-grid">
+        <div class="kv">
+          <label for="rangejumps">Steps per frame</label>
+          <input type="range" min="1" max="100" value="1" id="rangejumps" />
+        </div>
+        <div class="kv">
+          <label for="rangedt">Δt</label>
+          <input type="range" min="1" max="40" value="5" id="rangedt" />
+        </div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="header">Choose a letter</div>
+      <div class="controls-grid">
+        <div id="letter-group" class="alphabet-grid toggle-group" aria-label="Capital letter" aria-describedby="shape-status">
+          <button type="button" data-letter="A" aria-pressed="true">A</button>
+          <button type="button" data-letter="B" aria-pressed="false">B</button>
+          <button type="button" data-letter="C" aria-pressed="false">C</button>
+          <button type="button" data-letter="D" aria-pressed="false">D</button>
+          <button type="button" data-letter="E" aria-pressed="false">E</button>
+          <button type="button" data-letter="F" aria-pressed="false">F</button>
+          <button type="button" data-letter="G" aria-pressed="false">G</button>
+          <button type="button" data-letter="H" aria-pressed="false">H</button>
+          <button type="button" data-letter="I" aria-pressed="false">I</button>
+          <button type="button" data-letter="J" aria-pressed="false">J</button>
+          <button type="button" data-letter="K" aria-pressed="false">K</button>
+          <button type="button" data-letter="L" aria-pressed="false">L</button>
+          <button type="button" data-letter="M" aria-pressed="false">M</button>
+          <button type="button" data-letter="N" aria-pressed="false">N</button>
+          <button type="button" data-letter="O" aria-pressed="false">O</button>
+          <button type="button" data-letter="P" aria-pressed="false">P</button>
+          <button type="button" data-letter="Q" aria-pressed="false">Q</button>
+          <button type="button" data-letter="R" aria-pressed="false">R</button>
+          <button type="button" data-letter="S" aria-pressed="false">S</button>
+          <button type="button" data-letter="T" aria-pressed="false">T</button>
+          <button type="button" data-letter="U" aria-pressed="false">U</button>
+          <button type="button" data-letter="V" aria-pressed="false">V</button>
+          <button type="button" data-letter="W" aria-pressed="false">W</button>
+          <button type="button" data-letter="X" aria-pressed="false">X</button>
+          <button type="button" data-letter="Y" aria-pressed="false">Y</button>
+          <button type="button" data-letter="Z" aria-pressed="false">Z</button>
+        </div>
+        <div class="legend">Use a button, or type any letter or number. Shift preserves capitalization.</div>
+        <div id="shape-status" class="legend" role="status" aria-live="polite">Preparing inverse potential…</div>
+        <div id="potential-equation" class="legend"></div>
+        <button type="button" id="reseed-btn">Reseed particles in enclosing disk</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="header">Numerical potential</div>
+      <div class="controls-grid">
+        <div class="kv">
+          <label for="field-resolution">Field resolution</label>
+          <select id="field-resolution" class="numerical-select">
+            <option value="64">64 × 64</option>
+            <option value="96" selected>96 × 96</option>
+            <option value="128">128 × 128</option>
+            <option value="160">160 × 160</option>
+          </select>
+        </div>
+        <div class="kv">
+          <label for="quadrature-points">Quadrature points</label>
+          <select id="quadrature-points" class="numerical-select">
+            <option value="256">256</option>
+            <option value="512">512</option>
+            <option value="1024" selected>1&thinsp;024</option>
+            <option value="2048">2&thinsp;048</option>
+          </select>
+        </div>
+        <div class="legend">Higher settings give a finer inverse-designed field, but take longer to rebuild when the letter changes.</div>
+        <div id="precompute-progress" class="precompute-progress legend" role="status" aria-live="polite">
+          <div class="precompute-progress-label">
+            <span>Precomputing character fields</span>
+            <span id="precompute-count">0 / 62</span>
+          </div>
+          <progress id="precompute-bar" max="62" value="0">0 / 62</progress>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="header">Number of particles</div>
+      <div class="buttons-wrap toggle-group" id="n-group">
+        <button data-n="2">2</button>
+        <button data-n="50">50</button>
+        <button data-n="100">100</button>
+        <button data-n="200">200</button>
+        <button data-n="500">500</button>
+        <button data-n="1000">1&thinsp;000</button>
+        <button data-n="2000">2&thinsp;000</button>
+        <button data-n="5000">5&thinsp;000</button>
+        <button data-n="10000">10&thinsp;000</button>
+        <button data-n="20000">20&thinsp;000</button>
+        <button data-n="50000">50&thinsp;000</button>
+      </div>
+      <div class="legend" style="margin-top:6px;">Exact pairwise repulsion is O(n²); large values may be slow.</div>
+    </section>
+
+    <section class="section">
+      <div class="header">Rendering</div>
+      <div class="controls-grid">
+        <div class="kv-small">
+          <div>View</div>
+          <div id="view-group" class="view-mode toggle-group" aria-label="Canvas view">
+            <button type="button" data-view="particles" class="active" aria-pressed="true">Particles</button>
+            <button type="button" data-view="potential" aria-pressed="false">Potential</button>
+          </div>
+        </div>
+        <label class="row pill" style="width:fit-content; gap:6px;">
+          <input type="checkbox" id="outline-toggle" checked />
+          <span>Show target outline</span>
+        </label>
+        <div id="potential-scale" class="potential-scale legend" hidden>
+          <span>Low Q</span><span class="potential-scale-bar" aria-hidden="true"></span><span>High Q</span>
+        </div>
+      </div>
+      <div class="row" style="gap:12px; margin-top:10px;">
+        <div class="kv-small" style="flex:1 1 260px;">
+          <label for="rangesize">Particle radius</label>
+          <input type="range" min="1" max="10" value="3" id="rangesize" />
+        </div>
+        <div class="kv-small" style="flex:1 1 260px;">
+          <label for="rangeopacity">Particle opacity</label>
+          <input type="range" min="0.1" max="1" step="0.01" value="0.85" id="rangeopacity" />
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ===== UI refs ===== */
+const canvas = document.getElementById('main-canvas');
+const guideCanvas = document.getElementById('shape-guide');
+const controlsPanel = document.getElementById('controls');
+const letterGroup = document.getElementById('letter-group');
+const shapeStatusEl = document.getElementById('shape-status');
+const potentialEquationEl = document.getElementById('potential-equation');
+const badgeLetterEl = document.getElementById('badge-letter');
+const reseedBtn = document.getElementById('reseed-btn');
+const fieldResolutionSelect = document.getElementById('field-resolution');
+const quadraturePointsSelect = document.getElementById('quadrature-points');
+const precomputeProgressEl = document.getElementById('precompute-progress');
+const precomputeCountEl = document.getElementById('precompute-count');
+const precomputeBarEl = document.getElementById('precompute-bar');
+const nGroup = document.getElementById('n-group');
+const viewGroup = document.getElementById('view-group');
+const outlineToggle = document.getElementById('outline-toggle');
+const potentialScaleEl = document.getElementById('potential-scale');
+const themeToggle = document.getElementById('theme-toggle');
+const rangejumps = document.getElementById('rangejumps');
+const rangedt = document.getElementById('rangedt');
+const rangesize = document.getElementById('rangesize');
+const rangeopacity = document.getElementById('rangeopacity');
+const counterEl = document.getElementById('counter');
+const pendingMathElements = new Set();
+
+/* ===== Shape construction ===== */
+const MASK_SIZE = 192;
+let fieldSize = parseInt(fieldResolutionSelect.value, 10);
+let quadraturePointCount = parseInt(quadraturePointsSelect.value, 10);
+let activeFieldSize = fieldSize;
+const LETTER_EXTENT = 0.84;
+const SPAWN_DISK_RADIUS = Math.SQRT2 * LETTER_EXTENT;
+const FIELD_MIN = -1.5;
+const FIELD_MAX = 1.5;
+const EXTERIOR_STRENGTH = 8.0;
+let selectedLetter = 'A';
+let currentShape = null;
+
+function potentialWorkerMain() {
+  const MASK_SIZE = 192;
+  const LETTER_EXTENT = 0.84;
+  const FIELD_MIN = -1.5;
+  const FIELD_MAX = 1.5;
+  const BARRIER_STRENGTH = 4.0;
+  const LOG_SOFTENING = 1e-4;
+
+  function fitCharacterFont(ctx, character) {
+    let size = Math.floor(MASK_SIZE * .9);
+    while (size > 24) {
+      ctx.font = `900 ${size}px "Arial Black", Arial, sans-serif`;
+      const metrics = ctx.measureText(character);
+      const height = (metrics.actualBoundingBoxAscent || size * .75) + (metrics.actualBoundingBoxDescent || size * .2);
+      if (metrics.width <= MASK_SIZE * .84 && height <= MASK_SIZE * .84) return { size, metrics };
+      size -= 2;
+    }
+    return { size, metrics: ctx.measureText(character) };
+  }
+
+  function buildCharacterField(character, fieldSize, quadraturePointCount) {
+    const maskCanvas = new OffscreenCanvas(MASK_SIZE, MASK_SIZE);
+    const ctx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, MASK_SIZE, MASK_SIZE);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const { size, metrics } = fitCharacterFont(ctx, character);
+    ctx.font = `900 ${size}px "Arial Black", Arial, sans-serif`;
+    const ascent = metrics.actualBoundingBoxAscent || size * .75;
+    const descent = metrics.actualBoundingBoxDescent || size * .2;
+    ctx.fillText(character, MASK_SIZE / 2, MASK_SIZE / 2 + (ascent - descent) / 2);
+
+    const image = ctx.getImageData(0, 0, MASK_SIZE, MASK_SIZE);
+    const inside = new Uint8Array(MASK_SIZE * MASK_SIZE);
+    const insidePixels = [];
+    for (let i = 0; i < inside.length; i++) {
+      if (image.data[i * 4 + 3] >= 96) {
+        inside[i] = 1;
+        insidePixels.push(i);
+      }
+    }
+    if (!insidePixels.length) throw new Error(`Could not rasterize ${character}.`);
+
+    const sampleCount = Math.min(quadraturePointCount, insidePixels.length);
+    const samples = new Float32Array(sampleCount * 2);
+    const stride = insidePixels.length / sampleCount;
+    for (let i = 0; i < sampleCount; i++) {
+      const index = insidePixels[Math.min(insidePixels.length - 1, Math.floor((i + .5) * stride))];
+      const px = index % MASK_SIZE;
+      const py = Math.floor(index / MASK_SIZE);
+      samples[i * 2] = ((px + .5) / MASK_SIZE * 2 - 1) * LETTER_EXTENT;
+      samples[i * 2 + 1] = (1 - (py + .5) / MASK_SIZE * 2) * LETTER_EXTENT;
+    }
+
+    function maskContains(x, y) {
+      const u = (x / LETTER_EXTENT + 1) * .5;
+      const v = (1 - y / LETTER_EXTENT) * .5;
+      if (u < 0 || u >= 1 || v < 0 || v >= 1) return false;
+      const px = Math.min(MASK_SIZE - 1, Math.floor(u * MASK_SIZE));
+      const py = Math.min(MASK_SIZE - 1, Math.floor(v * MASK_SIZE));
+      return inside[py * MASK_SIZE + px] === 1;
+    }
+
+    const total = fieldSize * fieldSize;
+    const dist = new Float32Array(total);
+    const phi = new Float32Array(total);
+    const step = (FIELD_MAX - FIELD_MIN) / (fieldSize - 1);
+    const diagonal = Math.SQRT2;
+    dist.fill(1e9);
+    for (let y = 0; y < fieldSize; y++) {
+      const sy = FIELD_MAX - y * step;
+      for (let x = 0; x < fieldSize; x++) {
+        const sx = FIELD_MIN + x * step;
+        if (maskContains(sx, sy)) dist[y * fieldSize + x] = 0;
+      }
+    }
+    for (let y = 0; y < fieldSize; y++) {
+      for (let x = 0; x < fieldSize; x++) {
+        const i = y * fieldSize + x;
+        let d = dist[i];
+        if (x > 0) d = Math.min(d, dist[i - 1] + 1);
+        if (y > 0) d = Math.min(d, dist[i - fieldSize] + 1);
+        if (x > 0 && y > 0) d = Math.min(d, dist[i - fieldSize - 1] + diagonal);
+        if (x + 1 < fieldSize && y > 0) d = Math.min(d, dist[i - fieldSize + 1] + diagonal);
+        dist[i] = d;
+      }
+    }
+    for (let y = fieldSize - 1; y >= 0; y--) {
+      for (let x = fieldSize - 1; x >= 0; x--) {
+        const i = y * fieldSize + x;
+        let d = dist[i];
+        if (x + 1 < fieldSize) d = Math.min(d, dist[i + 1] + 1);
+        if (y + 1 < fieldSize) d = Math.min(d, dist[i + fieldSize] + 1);
+        if (x + 1 < fieldSize && y + 1 < fieldSize) d = Math.min(d, dist[i + fieldSize + 1] + diagonal);
+        if (x > 0 && y + 1 < fieldSize) d = Math.min(d, dist[i + fieldSize - 1] + diagonal);
+        dist[i] = d;
+        phi[i] = BARRIER_STRENGTH * Math.pow(d * step, 2);
+      }
+    }
+
+    const field = new Float32Array(total * 4);
+    const logScale = 2 / sampleCount;
+    let minPotential = Infinity;
+    let maxPotential = -Infinity;
+    for (let gy = 0; gy < fieldSize; gy++) {
+      const y = FIELD_MAX - gy * step;
+      for (let gx = 0; gx < fieldSize; gx++) {
+        const x = FIELD_MIN + gx * step;
+        let gradX = 0;
+        let gradY = 0;
+        let logPotential = 0;
+        for (let s = 0; s < sampleCount; s++) {
+          const dx = x - samples[s * 2];
+          const dy = y - samples[s * 2 + 1];
+          const radiusSquared = dx * dx + dy * dy + LOG_SOFTENING;
+          const inv = 1 / radiusSquared;
+          gradX += dx * inv;
+          gradY += dy * inv;
+          logPotential += Math.log(radiusSquared);
+        }
+        gradX *= logScale;
+        gradY *= logScale;
+        const i = gy * fieldSize + gx;
+        if (dist[i] > 0) {
+          const left = phi[gy * fieldSize + Math.max(0, gx - 1)];
+          const right = phi[gy * fieldSize + Math.min(fieldSize - 1, gx + 1)];
+          const top = phi[Math.max(0, gy - 1) * fieldSize + gx];
+          const bottom = phi[Math.min(fieldSize - 1, gy + 1) * fieldSize + gx];
+          const dxSpan = gx > 0 && gx + 1 < fieldSize ? 2 * step : step;
+          const dySpan = gy > 0 && gy + 1 < fieldSize ? 2 * step : step;
+          gradX += (right - left) / dxSpan;
+          gradY += (top - bottom) / dySpan;
+        }
+        const offset = i * 4;
+        const potential = logPotential / sampleCount + phi[i];
+        field[offset] = gradX;
+        field[offset + 1] = gradY;
+        field[offset + 2] = dist[i] === 0 ? 1 : 0;
+        field[offset + 3] = potential;
+        minPotential = Math.min(minPotential, potential);
+        maxPotential = Math.max(maxPotential, potential);
+      }
+    }
+
+    const pixelArea = Math.pow(2 * LETTER_EXTENT / MASK_SIZE, 2);
+    return {
+      character,
+      fieldSize,
+      sampleCount,
+      area: insidePixels.length * pixelArea,
+      minPotential,
+      maxPotential,
+      inside,
+      field
+    };
+  }
+
+  self.onmessage = event => {
+    const { character, fieldSize, quadraturePointCount, generation } = event.data;
+    try {
+      const result = buildCharacterField(character, fieldSize, quadraturePointCount);
+      self.postMessage({ type: 'result', generation, ...result }, [result.inside.buffer, result.field.buffer]);
+    } catch (error) {
+      self.postMessage({ type: 'error', generation, character, message: error.message });
+    }
+  };
+}
+
+function createGuideSource(inside) {
+  const source = document.createElement('canvas');
+  source.width = MASK_SIZE;
+  source.height = MASK_SIZE;
+  const ctx = source.getContext('2d');
+  const image = ctx.createImageData(MASK_SIZE, MASK_SIZE);
+  for (let index = 0; index < inside.length; index++) {
+    if (!inside[index]) continue;
+    const x = index % MASK_SIZE;
+    const y = Math.floor(index / MASK_SIZE);
+    const edge = x === 0 || y === 0 || x === MASK_SIZE - 1 || y === MASK_SIZE - 1 ||
+      !inside[index - 1] || !inside[index + 1] || !inside[index - MASK_SIZE] || !inside[index + MASK_SIZE];
+    const offset = index * 4;
+    image.data[offset] = 79;
+    image.data[offset + 1] = 140;
+    image.data[offset + 2] = 255;
+    image.data[offset + 3] = edge ? 150 : 24;
+  }
+  ctx.putImageData(image, 0, 0);
+  return source;
+}
+
+function createPotentialSource(field, minPotential, maxPotential, size) {
+  const source = document.createElement('canvas');
+  source.width = size;
+  source.height = size;
+  const ctx = source.getContext('2d');
+  const image = ctx.createImageData(size, size);
+  const stops = [
+    [13, 17, 23],
+    [38, 76, 154],
+    [79, 140, 255],
+    [99, 214, 197],
+    [245, 211, 91]
+  ];
+  const span = Math.max(1e-6, maxPotential - minPotential);
+  for (let i = 0; i < size * size; i++) {
+    const normalized = Math.pow(Math.max(0, Math.min(1, (field[i * 4 + 3] - minPotential) / span)), .8);
+    const scaled = normalized * (stops.length - 1);
+    const index = Math.min(stops.length - 2, Math.floor(scaled));
+    const mixAmount = scaled - index;
+    const offset = i * 4;
+    for (let channel = 0; channel < 3; channel++) {
+      image.data[offset + channel] = Math.round(stops[index][channel] * (1 - mixAmount) + stops[index + 1][channel] * mixAmount);
+    }
+    image.data[offset + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  return source;
+}
+
+const SUPPORTED_CHARACTERS = Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789');
+const potentialWorkerUrl = URL.createObjectURL(new Blob([
+  `(${potentialWorkerMain.toString()})()`
+], { type: 'text/javascript' }));
+let potentialGeneration = 0;
+let shapeCache = new Map();
+let backgroundQueue = [];
+let backgroundWorker = null;
+let foregroundWorker = null;
+let backgroundBusy = false;
+let webGPUStarted = false;
+
+function updatePrecomputeProgress() {
+  const completed = shapeCache.size;
+  precomputeBarEl.max = SUPPORTED_CHARACTERS.length;
+  precomputeBarEl.value = completed;
+  precomputeBarEl.textContent = `${completed} / ${SUPPORTED_CHARACTERS.length}`;
+  precomputeCountEl.textContent = `${completed} / ${SUPPORTED_CHARACTERS.length}`;
+  precomputeProgressEl.hidden = completed >= SUPPORTED_CHARACTERS.length;
+}
+
+function shapeFromWorkerMessage(data) {
+  return {
+    letter: data.character,
+    generation: data.generation,
+    fieldSize: data.fieldSize,
+    sampleCount: data.sampleCount,
+    area: data.area,
+    inside: new Uint8Array(data.inside),
+    field: new Float32Array(data.field),
+    potentialRange: { min: data.minPotential, max: data.maxPotential },
+    guideSource: null,
+    potentialSource: null
+  };
+}
+
+function cacheWorkerResult(data) {
+  if (data.generation !== potentialGeneration) return null;
+  if (shapeCache.has(data.character)) return shapeCache.get(data.character);
+  const shape = shapeFromWorkerMessage(data);
+  shapeCache.set(data.character, shape);
+  updatePrecomputeProgress();
+  if (data.character === selectedLetter) applyShape(shape);
+  return shape;
+}
+
+function reportWorkerError(data, role) {
+  if (data.generation !== potentialGeneration) return;
+  console.error(`${role} potential worker:`, data.message);
+  if (data.character === selectedLetter) {
+    shapeStatusEl.dataset.state = 'error';
+    shapeStatusEl.textContent = `Could not build ${data.character}: ${data.message}`;
+  }
+}
+
+function makePotentialWorker(role) {
+  const worker = new Worker(potentialWorkerUrl);
+  worker.onerror = event => {
+    console.error(`${role} potential worker failed:`, event.message);
+    if (role === 'foreground') {
+      shapeStatusEl.dataset.state = 'error';
+      shapeStatusEl.textContent = `Could not build ${selectedLetter}: ${event.message}`;
+    }
+  };
+  worker.onmessage = event => {
+    if (event.data.type === 'error') reportWorkerError(event.data, role);
+    else cacheWorkerResult(event.data);
+    if (role === 'background') {
+      backgroundBusy = false;
+      dispatchNextBackgroundCharacter();
+    }
+  };
+  return worker;
+}
+
+function workerRequest(character) {
+  return { character, fieldSize, quadraturePointCount, generation: potentialGeneration };
+}
+
+function dispatchNextBackgroundCharacter() {
+  if (backgroundBusy || !backgroundWorker) return;
+  while (backgroundQueue.length && shapeCache.has(backgroundQueue[0])) backgroundQueue.shift();
+  const character = backgroundQueue.shift();
+  if (!character) {
+    updatePrecomputeProgress();
+    return;
+  }
+  backgroundBusy = true;
+  backgroundWorker.postMessage(workerRequest(character));
+}
+
+function requestForegroundCharacter(character) {
+  foregroundWorker?.terminate();
+  foregroundWorker = makePotentialWorker('foreground');
+  foregroundWorker.postMessage(workerRequest(character));
+}
+
+function applyShape(shape) {
+  if (shape.generation !== potentialGeneration || shape.letter !== selectedLetter) return;
+  if (!shape.guideSource) shape.guideSource = createGuideSource(shape.inside);
+  if (!shape.potentialSource) {
+    shape.potentialSource = createPotentialSource(
+      shape.field,
+      shape.potentialRange.min,
+      shape.potentialRange.max,
+      shape.fieldSize
+    );
+  }
+  currentShape = shape;
+  activeFieldSize = shape.fieldSize;
+  updateShapeCopy();
+  drawShapeGuide();
+  if (!webGPUStarted) {
+    webGPUStarted = true;
+    initWebGPU().catch(error => {
+      console.error(error);
+      shapeStatusEl.dataset.state = 'error';
+      shapeStatusEl.textContent = `${error.message} The character guide and controls remain available.`;
+    });
+  } else if (device) {
+    createShapeFieldBuffer();
+    rebuildComputeBindGroups();
+    simDirty = true;
+  }
+}
+
+function requestCharacter(character) {
+  badgeLetterEl.textContent = character;
+  setActiveButtons();
+  const cached = shapeCache.get(character);
+  if (cached) {
+    applyShape(cached);
+    return;
+  }
+  shapeStatusEl.dataset.state = 'building';
+  shapeStatusEl.textContent = `Loading ${character} immediately while the remaining fields precompute…`;
+  requestForegroundCharacter(character);
+}
+
+function restartPotentialPrecomputation() {
+  potentialGeneration++;
+  shapeCache = new Map();
+  backgroundQueue = SUPPORTED_CHARACTERS.filter(character => character !== selectedLetter);
+  backgroundQueue.push(selectedLetter);
+  backgroundBusy = false;
+  backgroundWorker?.terminate();
+  foregroundWorker?.terminate();
+  backgroundWorker = makePotentialWorker('background');
+  foregroundWorker = null;
+  precomputeProgressEl.hidden = false;
+  updatePrecomputeProgress();
+  requestCharacter(selectedLetter);
+  dispatchNextBackgroundCharacter();
+}
+
+function randomPointInSpawnDisk() {
+  const radius = SPAWN_DISK_RADIUS * Math.sqrt(Math.random());
+  const angle = Math.random() * Math.PI * 2;
+  return {
+    x: radius * Math.cos(angle),
+    y: radius * Math.sin(angle)
+  };
+}
+
+function updateShapeCopy() {
+  badgeLetterEl.textContent = selectedLetter;
+  shapeStatusEl.dataset.state = 'ready';
+  shapeStatusEl.textContent = `${selectedLetter} ready · uniform target · |Ω| ≈ ${currentShape.area.toFixed(3)} · field ${currentShape.fieldSize} × ${currentShape.fieldSize} · quadrature ${currentShape.sampleCount}`;
+  potentialEquationEl.innerHTML = `Generated field:<br>$Q_{${selectedLetter}}(z)=2\\int \\rho_{${selectedLetter}}(w)\\log|z-w|\\,dA(w)+4\\,\\operatorname{dist}(z,\\Omega_{${selectedLetter}})^2$.`;
+  requestTypeset(potentialEquationEl);
+}
+
+function drawShapeGuide() {
+  const ctx = guideCanvas.getContext('2d');
+  ctx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+  if (!currentShape) return;
+  ctx.imageSmoothingEnabled = true;
+  if (viewMode === 'potential') {
+    const fieldLeft = (1 + FIELD_MIN * simToClip) * guideCanvas.width / 2;
+    const fieldTop = (1 - FIELD_MAX * simToClip) * guideCanvas.height / 2;
+    const fieldSize = (FIELD_MAX - FIELD_MIN) * simToClip * guideCanvas.width / 2;
+    ctx.drawImage(currentShape.potentialSource, fieldLeft, fieldTop, fieldSize, fieldSize);
+  }
+  if (showOutline) {
+    const size = LETTER_EXTENT * simToClip * guideCanvas.width;
+    const left = (1 - LETTER_EXTENT * simToClip) * guideCanvas.width / 2;
+    const top = (1 - LETTER_EXTENT * simToClip) * guideCanvas.height / 2;
+    ctx.drawImage(currentShape.guideSource, left, top, size, size);
+  }
+}
+
+/* ===== Simulation state ===== */
+let n = 2000;
+let steps = parseInt(rangejumps.value, 10);
+let dt = parseFloat(rangedt.value) / 30000;
+let particleSizePx = defaultRadiusForN(n);
+let userOpacity = parseFloat(rangeopacity.value);
+let frameCounter = 0;
+const damping = .8;
+let isDark = true;
+let viewMode = 'particles';
+let showOutline = true;
+const simToClip = .7;
+
+/* ===== WebGPU ===== */
+let adapter, device, queue, context, canvasFormat;
+let computePipeline, renderPipeline;
+let simParamsBuf, renderParamsBuf, renderBindGroup, shapeFieldBuf;
+let posA, posB, velA, velB, quadVB;
+let ping = 0;
+let WG_SIZE_JS = 256;
+let computeBG = [];
+let numGroups = 0;
+let simDirty = true;
+let renderDirty = true;
+
+function isPortrait() { return window.innerHeight > window.innerWidth; }
+
+function resizeCanvasSquare() {
+  const gap = 16;
+  const pad = 24;
+  const viewportW = document.documentElement.clientWidth;
+  const viewportH = document.documentElement.clientHeight;
+  let size;
+  if (isPortrait()) {
+    document.body.classList.add('portrait');
+    size = Math.max(300, Math.min(viewportW - pad * 2, viewportH - pad * 2 - 200));
+  } else {
+    document.body.classList.remove('portrait');
+    const controlsW = controlsPanel.offsetWidth || Math.ceil(controlsPanel.getBoundingClientRect().width) || 420;
+    size = Math.max(300, Math.min(viewportW - controlsW - gap - pad * 2, viewportH - pad * 2));
+  }
+  size = Math.floor(size);
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+  guideCanvas.style.width = `${size}px`;
+  guideCanvas.style.height = `${size}px`;
+  if (canvas.width !== size || canvas.height !== size) {
+    canvas.width = size;
+    canvas.height = size;
+    guideCanvas.width = size;
+    guideCanvas.height = size;
+    renderDirty = true;
+    drawShapeGuide();
+  }
+  return size;
+}
+
+function adjustLayout() {
+  controlsPanel.classList.toggle('compact', !isPortrait() && controlsPanel.getBoundingClientRect().width < 380);
+  if (isPortrait()) {
+    const rect = canvas.getBoundingClientRect();
+    controlsPanel.style.maxHeight = `${Math.max(180, window.innerHeight - rect.height - 40)}px`;
+  } else {
+    controlsPanel.style.maxHeight = '';
+  }
+}
+
+function syncResponsiveLayout(maxPasses = 3) {
+  let previous = -1;
+  for (let i = 0; i < maxPasses; i++) {
+    const next = resizeCanvasSquare();
+    adjustLayout();
+    if (next === previous) break;
+    previous = next;
+  }
+}
+
+let resizeRaf = 0;
+function scheduleResponsiveLayout(maxPasses = 3) {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    syncResponsiveLayout(maxPasses);
+  });
+}
+window.addEventListener('resize', () => scheduleResponsiveLayout(4));
+
+function createQuadVB() {
+  const quad = new Float32Array([-0.5,-0.5, 0.5,-0.5, 0.5,0.5, -0.5,-0.5, 0.5,0.5, -0.5,0.5]);
+  quadVB = device.createBuffer({ size: quad.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, mappedAtCreation: true });
+  new Float32Array(quadVB.getMappedRange()).set(quad);
+  quadVB.unmap();
+}
+
+function createUniformBuffers() {
+  simParamsBuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  renderParamsBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+}
+
+function createShapeFieldBuffer() {
+  shapeFieldBuf = device.createBuffer({
+    size: currentShape.field.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+  });
+  queue.writeBuffer(shapeFieldBuf, 0, currentShape.field);
+}
+
+function writeSimParams() {
+  if (!simDirty) return;
+  const u32 = new Uint32Array([n >>> 0, activeFieldSize >>> 0, 0, 0]);
+  const f32 = new Float32Array([dt, damping, FIELD_MIN, FIELD_MAX, EXTERIOR_STRENGTH, 0, 0, 0]);
+  const packed = new ArrayBuffer(u32.byteLength + f32.byteLength);
+  new Uint32Array(packed, 0, u32.length).set(u32);
+  new Float32Array(packed, u32.byteLength, f32.length).set(f32);
+  queue.writeBuffer(simParamsBuf, 0, packed);
+  simDirty = false;
+}
+
+function writeRenderParams() {
+  if (!renderDirty) return;
+  const values = new Float32Array([simToClip, particleSizePx, canvas.width, canvas.height, userOpacity, isDark ? 1 : 0, viewMode === 'particles' ? 1 : 0, 0]);
+  queue.writeBuffer(renderParamsBuf, 0, values);
+  renderDirty = false;
+}
+
+async function createPipelines() {
+  const computeWGSL = `
+const WG_SIZE: u32 = ${WG_SIZE_JS}u;
+struct SimParams {
+  n: u32,
+  gridSize: u32,
+  _padU0: u32,
+  _padU1: u32,
+  dt: f32,
+  damping: f32,
+  fieldMin: f32,
+  fieldMax: f32,
+  exteriorStrength: f32,
+  _padA: f32,
+  _padB: f32,
+  _padC: f32,
+};
+@group(0) @binding(0) var<storage, read> posIn: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read> velIn: array<vec2<f32>>;
+@group(0) @binding(2) var<storage, read_write> posOut: array<vec2<f32>>;
+@group(0) @binding(3) var<storage, read_write> velOut: array<vec2<f32>>;
+@group(0) @binding(4) var<uniform> params: SimParams;
+@group(0) @binding(5) var<storage, read> shapeField: array<vec4<f32>>;
+
+fn fieldValue(ix: u32, iy: u32) -> vec2<f32> {
+  return shapeField[iy * params.gridSize + ix].xy;
+}
+
+fn gradConf(x: f32, y: f32) -> vec2<f32> {
+  let span = params.fieldMax - params.fieldMin;
+  let maxIndex = params.gridSize - 1u;
+  let clampedX = clamp(x, params.fieldMin, params.fieldMax);
+  let clampedY = clamp(y, params.fieldMin, params.fieldMax);
+  let fx = (clampedX - params.fieldMin) / span * f32(maxIndex);
+  let fy = (params.fieldMax - clampedY) / span * f32(maxIndex);
+  let x0 = u32(floor(fx));
+  let y0 = u32(floor(fy));
+  let x1 = min(x0 + 1u, maxIndex);
+  let y1 = min(y0 + 1u, maxIndex);
+  let tx = fx - f32(x0);
+  let ty = fy - f32(y0);
+  let top = mix(fieldValue(x0, y0), fieldValue(x1, y0), tx);
+  let bottom = mix(fieldValue(x0, y1), fieldValue(x1, y1), tx);
+  let sampled = mix(top, bottom, ty);
+  let beyond = vec2<f32>(x - clampedX, y - clampedY);
+  return sampled + 2.0 * params.exteriorStrength * beyond;
+}
+
+var<workgroup> tilePos: array<vec2<f32>, WG_SIZE>;
+
+@compute @workgroup_size(WG_SIZE)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocation_id) lid: vec3<u32>) {
+  let i = gid.x;
+  let N = params.n;
+  var px: f32 = 0.0;
+  var py: f32 = 0.0;
+  var vx: f32 = 0.0;
+  var vy: f32 = 0.0;
+  if (i < N) {
+    px = posIn[i].x; py = posIn[i].y;
+    vx = velIn[i].x; vy = velIn[i].y;
+  }
+  let conf = gradConf(px, py);
+  var accx = -f32(N) * conf.x;
+  var accy = -f32(N) * conf.y;
+  var tileStart: u32 = 0u;
+  loop {
+    if (tileStart >= N) { break; }
+    let j = tileStart + lid.x;
+    if (j < N) { tilePos[lid.x] = posIn[j]; }
+    workgroupBarrier();
+    let count = min(WG_SIZE, N - tileStart);
+    var k: u32 = 0u;
+    loop {
+      if (k >= count) { break; }
+      if (tileStart + k != i) {
+        let dx = tilePos[k].x - px;
+        let dy = tilePos[k].y - py;
+        let scale = 2.0 / (dx * dx + dy * dy + 1e-6);
+        accx -= dx * scale;
+        accy -= dy * scale;
+      }
+      k = k + 1u;
+    }
+    workgroupBarrier();
+    tileStart = tileStart + WG_SIZE;
+  }
+  if (i < N) {
+    vx = (vx + accx * params.dt) * params.damping;
+    vy = (vy + accy * params.dt) * params.damping;
+    px = px + vx * params.dt;
+    py = py + vy * params.dt;
+    posOut[i] = vec2<f32>(px, py);
+    velOut[i] = vec2<f32>(vx, vy);
+  }
+}`;
+
+  const renderWGSL = `
+struct RenderParams {
+  simToClip: f32,
+  particleSizePx: f32,
+  canvasW: f32,
+  canvasH: f32,
+  alpha: f32,
+  isDark: f32,
+  showParticles: f32,
+  _padC: f32,
+};
+@group(0) @binding(0) var<uniform> rp: RenderParams;
+struct VSOut { @builtin(position) pos: vec4<f32>, };
+@vertex
+fn vsMain(@location(0) quadPos: vec2<f32>, @location(1) instPos: vec2<f32>) -> VSOut {
+  var out: VSOut;
+  let base = instPos * rp.simToClip;
+  let offset = vec2<f32>(quadPos.x * rp.particleSizePx * 2.0 / rp.canvasW, -quadPos.y * rp.particleSizePx * 2.0 / rp.canvasH);
+  out.pos = vec4<f32>(base + offset, 0.0, 1.0);
+  return out;
+}
+@fragment
+fn fsMain() -> @location(0) vec4<f32> {
+  let particle = select(vec3<f32>(0.0), vec3<f32>(1.0), rp.isDark > .5);
+  return vec4<f32>(particle, rp.alpha * rp.showParticles);
+}`;
+
+  const computeModule = device.createShaderModule({ code: computeWGSL });
+  const renderModule = device.createShaderModule({ code: renderWGSL });
+  computePipeline = device.createComputePipeline({ layout: 'auto', compute: { module: computeModule, entryPoint: 'main' } });
+  renderPipeline = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: {
+      module: renderModule,
+      entryPoint: 'vsMain',
+      buffers: [
+        { arrayStride: 8, stepMode: 'vertex', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] },
+        { arrayStride: 8, stepMode: 'instance', attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }] }
+      ]
+    },
+    fragment: {
+      module: renderModule,
+      entryPoint: 'fsMain',
+      targets: [{
+        format: canvasFormat,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+        }
+      }]
+    },
+    primitive: { topology: 'triangle-list' }
+  });
+  renderBindGroup = device.createBindGroup({
+    layout: renderPipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: renderParamsBuf } }]
+  });
+}
+
+function rebuildComputeBindGroups() {
+  const layout = computePipeline.getBindGroupLayout(0);
+  computeBG = [
+    device.createBindGroup({ layout, entries: [
+      { binding: 0, resource: { buffer: posA } }, { binding: 1, resource: { buffer: velA } },
+      { binding: 2, resource: { buffer: posB } }, { binding: 3, resource: { buffer: velB } },
+      { binding: 4, resource: { buffer: simParamsBuf } }, { binding: 5, resource: { buffer: shapeFieldBuf } }
+    ]}),
+    device.createBindGroup({ layout, entries: [
+      { binding: 0, resource: { buffer: posB } }, { binding: 1, resource: { buffer: velB } },
+      { binding: 2, resource: { buffer: posA } }, { binding: 3, resource: { buffer: velA } },
+      { binding: 4, resource: { buffer: simParamsBuf } }, { binding: 5, resource: { buffer: shapeFieldBuf } }
+    ]})
+  ];
+}
+
+function createParticleBuffers(N) {
+  const bytes = N * 8;
+  posA = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+  posB = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX });
+  velA = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+  velB = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE });
+  const positions = new Float32Array(N * 2);
+  const velocities = new Float32Array(N * 2);
+  for (let i = 0; i < N; i++) {
+    const point = randomPointInSpawnDisk();
+    positions[i * 2] = point.x;
+    positions[i * 2 + 1] = point.y;
+  }
+  queue.writeBuffer(posA, 0, positions);
+  queue.writeBuffer(velA, 0, velocities);
+  rebuildComputeBindGroups();
+  numGroups = Math.ceil(n / WG_SIZE_JS);
+  ping = 0;
+}
+
+function getRenderBuffer() { return ping === 1 ? posB : posA; }
+
+async function initWebGPU() {
+  if (!('gpu' in navigator)) throw new Error('WebGPU is not supported in this browser.');
+  adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error('No WebGPU adapter was found.');
+  const maxX = adapter.limits?.maxComputeWorkgroupSizeX || 256;
+  WG_SIZE_JS = maxX >= 256 ? 256 : (maxX >= 128 ? 128 : 64);
+  device = await adapter.requestDevice();
+  device.addEventListener('uncapturederror', event => console.error('WebGPU error:', event.error));
+  queue = device.queue;
+  context = canvas.getContext('webgpu');
+  canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({ device, format: canvasFormat, alphaMode: 'opaque' });
+  createUniformBuffers();
+  createShapeFieldBuffer();
+  createQuadVB();
+  await createPipelines();
+  createParticleBuffers(n);
+  rangesize.value = String(particleSizePx);
+  setActiveButtons();
+  syncResponsiveLayout(4);
+  requestAnimationFrame(frame);
+}
+
+function frame() {
+  const encoder = device.createCommandEncoder();
+  writeSimParams();
+  writeRenderParams();
+  const computePass = encoder.beginComputePass();
+  computePass.setPipeline(computePipeline);
+  for (let i = 0; i < steps; i++) {
+    computePass.setBindGroup(0, computeBG[ping]);
+    computePass.dispatchWorkgroups(numGroups);
+    ping ^= 1;
+  }
+  computePass.end();
+  const renderPass = encoder.beginRenderPass({
+    colorAttachments: [{
+      view: context.getCurrentTexture().createView(),
+      clearValue: isDark ? { r: .05, g: .06, b: .08, a: 1 } : { r: 1, g: 1, b: 1, a: 1 },
+      loadOp: 'clear',
+      storeOp: 'store'
+    }]
+  });
+  renderPass.setPipeline(renderPipeline);
+  renderPass.setBindGroup(0, renderBindGroup);
+  renderPass.setVertexBuffer(0, quadVB);
+  renderPass.setVertexBuffer(1, getRenderBuffer());
+  renderPass.draw(6, n);
+  renderPass.end();
+  queue.submit([encoder.finish()]);
+  frameCounter++;
+  counterEl.textContent = frameCounter.toLocaleString('en-US');
+  requestAnimationFrame(frame);
+}
+
+/* ===== UI helpers ===== */
+function requestTypeset(el) {
+  if (!el) return;
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise([el]);
+  } else {
+    for (const pending of pendingMathElements) {
+      if (pending.contains(el)) return;
+      if (el.contains(pending)) pendingMathElements.delete(pending);
+    }
+    pendingMathElements.add(el);
+  }
+}
+
+function flushPendingMath() {
+  if (pendingMathElements.size && window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise(Array.from(pendingMathElements));
+    pendingMathElements.clear();
+  }
+}
+
+function defaultRadiusForN(N) {
+  if (N <= 500) return 4;
+  if (N <= 2000) return 3;
+  if (N <= 5000) return 2;
+  return 1;
+}
+
+function resetFrameCounter() {
+  frameCounter = 0;
+  counterEl.textContent = '0';
+}
+
+function setActiveButtons() {
+  letterGroup.querySelectorAll('button[data-letter]').forEach(button => {
+    const active = button.dataset.letter === selectedLetter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  nGroup.querySelectorAll('button[data-n]').forEach(button => {
+    button.classList.toggle('active', parseInt(button.dataset.n, 10) === n);
+  });
+}
+
+function setViewMode(nextMode) {
+  viewMode = nextMode === 'potential' ? 'potential' : 'particles';
+  viewGroup.querySelectorAll('button[data-view]').forEach(button => {
+    const active = button.dataset.view === viewMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  potentialScaleEl.hidden = viewMode !== 'potential';
+  renderDirty = true;
+  drawShapeGuide();
+}
+
+function setN(nextN) {
+  n = nextN;
+  particleSizePx = defaultRadiusForN(n);
+  rangesize.value = String(particleSizePx);
+  renderDirty = true;
+  simDirty = true;
+  createParticleBuffers(n);
+  resetFrameCounter();
+  setActiveButtons();
+  scheduleResponsiveLayout(4);
+}
+
+function selectCharacter(character) {
+  selectedLetter = character;
+  requestCharacter(character);
+}
+
+function updateNumericalPotential() {
+  fieldSize = parseInt(fieldResolutionSelect.value, 10);
+  quadraturePointCount = parseInt(quadraturePointsSelect.value, 10);
+  restartPotentialPrecomputation();
+}
+
+nGroup.addEventListener('click', event => {
+  const button = event.target.closest('button[data-n]');
+  if (button) setN(parseInt(button.dataset.n, 10));
+});
+viewGroup.addEventListener('click', event => {
+  const button = event.target.closest('button[data-view]');
+  if (button) setViewMode(button.dataset.view);
+});
+outlineToggle.addEventListener('change', () => {
+  showOutline = outlineToggle.checked;
+  drawShapeGuide();
+});
+letterGroup.addEventListener('click', event => {
+  const button = event.target.closest('button[data-letter]');
+  if (button && button.dataset.letter !== selectedLetter) selectCharacter(button.dataset.letter);
+});
+fieldResolutionSelect.addEventListener('change', updateNumericalPotential);
+quadraturePointsSelect.addEventListener('change', updateNumericalPotential);
+document.addEventListener('keydown', event => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+  if (!/^[A-Za-z0-9]$/.test(event.key)) return;
+  event.preventDefault();
+  selectCharacter(event.key);
+});
+reseedBtn.addEventListener('click', () => {
+  if (!device || !currentShape) return;
+  createParticleBuffers(n);
+  resetFrameCounter();
+});
+rangejumps.addEventListener('input', () => { steps = parseInt(rangejumps.value, 10); });
+rangedt.addEventListener('input', () => { dt = parseFloat(rangedt.value) / 30000; simDirty = true; });
+rangesize.addEventListener('input', () => { particleSizePx = parseInt(rangesize.value, 10); renderDirty = true; });
+rangeopacity.addEventListener('input', () => { userOpacity = parseFloat(rangeopacity.value); renderDirty = true; });
+themeToggle.addEventListener('change', () => {
+  isDark = themeToggle.checked;
+  document.body.classList.toggle('light', !isDark);
+  renderDirty = true;
+  drawShapeGuide();
+});
+
+restartPotentialPrecomputation();
+requestTypeset(controlsPanel);
+syncResponsiveLayout(4);
+
+window.addEventListener('load', () => {
+  if (window.MathJax?.startup?.promise) {
+    MathJax.startup.promise.then(() => { flushPendingMath(); scheduleResponsiveLayout(6); });
+  } else {
+    flushPendingMath();
+  }
+  scheduleResponsiveLayout(6);
+});
+
+</script>
+</body>
+</html>

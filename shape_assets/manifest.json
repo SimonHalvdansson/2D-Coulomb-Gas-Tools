@@ -1,0 +1,390 @@
+{
+  "format": "SHP1",
+  "version": 1,
+  "encoding": "float16-le",
+  "fieldSize": 160,
+  "maskSize": 384,
+  "quadraturePoints": 8192,
+  "channels": [
+    "gradientX",
+    "gradientY",
+    "insideMask",
+    "potential"
+  ],
+  "characters": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+  "totalBytes": 13842368,
+  "assets": {
+    "A": {
+      "file": "0041.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0039043426513671875
+    },
+    "B": {
+      "file": "0042.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038022994995117188
+    },
+    "C": {
+      "file": "0043.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.00383758544921875
+    },
+    "D": {
+      "file": "0044.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0037899017333984375
+    },
+    "E": {
+      "file": "0045.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.0038318634033203125
+    },
+    "F": {
+      "file": "0046.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039005279541015625
+    },
+    "G": {
+      "file": "0047.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038700103759765625
+    },
+    "H": {
+      "file": "0048.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039005279541015625,
+      "maxPotentialError": 0.0019507408142089844
+    },
+    "I": {
+      "file": "0049.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0039005279541015625
+    },
+    "J": {
+      "file": "004A.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.007686614990234375,
+      "maxPotentialError": 0.00771331787109375
+    },
+    "K": {
+      "file": "004B.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.001953125
+    },
+    "L": {
+      "file": "004C.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00643157958984375,
+      "maxPotentialError": 0.007415771484375
+    },
+    "M": {
+      "file": "004D.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.001953125
+    },
+    "N": {
+      "file": "004E.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0019516944885253906
+    },
+    "O": {
+      "file": "004F.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038890838623046875
+    },
+    "P": {
+      "file": "0050.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039052963256835938
+    },
+    "Q": {
+      "file": "0051.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038909912109375
+    },
+    "R": {
+      "file": "0052.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0037565231323242188
+    },
+    "S": {
+      "file": "0053.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039043426513671875
+    },
+    "T": {
+      "file": "0054.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.003894805908203125
+    },
+    "U": {
+      "file": "0055.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.003887176513671875
+    },
+    "V": {
+      "file": "0056.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.00389862060546875
+    },
+    "W": {
+      "file": "0057.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038824081420898438
+    },
+    "X": {
+      "file": "0058.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0019526481628417969
+    },
+    "Y": {
+      "file": "0059.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.003894805908203125
+    },
+    "Z": {
+      "file": "005A.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.001953125
+    },
+    "a": {
+      "file": "0061.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039033889770507812,
+      "maxPotentialError": 0.0039005279541015625
+    },
+    "b": {
+      "file": "0062.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038967132568359375
+    },
+    "c": {
+      "file": "0063.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.003894805908203125
+    },
+    "d": {
+      "file": "0064.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.00389862060546875
+    },
+    "e": {
+      "file": "0065.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.00390625
+    },
+    "f": {
+      "file": "0066.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038976669311523438
+    },
+    "g": {
+      "file": "0067.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038909912109375
+    },
+    "h": {
+      "file": "0068.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.00389862060546875
+    },
+    "i": {
+      "file": "0069.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038995742797851562
+    },
+    "j": {
+      "file": "006A.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039043426513671875
+    },
+    "k": {
+      "file": "006B.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038700103759765625
+    },
+    "l": {
+      "file": "006C.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039052963256835938
+    },
+    "m": {
+      "file": "006D.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038995742797851562
+    },
+    "n": {
+      "file": "006E.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.0029439926147460938
+    },
+    "o": {
+      "file": "006F.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.0039043426513671875
+    },
+    "p": {
+      "file": "0070.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.003902435302734375
+    },
+    "q": {
+      "file": "0071.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.003902435302734375
+    },
+    "r": {
+      "file": "0072.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038938522338867188
+    },
+    "s": {
+      "file": "0073.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.003902435302734375,
+      "maxPotentialError": 0.0038499832153320312
+    },
+    "t": {
+      "file": "0074.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0039043426513671875
+    },
+    "u": {
+      "file": "0075.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039043426513671875,
+      "maxPotentialError": 0.00321197509765625
+    },
+    "v": {
+      "file": "0076.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.00390625
+    },
+    "w": {
+      "file": "0077.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038843154907226562
+    },
+    "x": {
+      "file": "0078.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0031175613403320312
+    },
+    "y": {
+      "file": "0079.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039052963256835938
+    },
+    "z": {
+      "file": "007A.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0019512176513671875
+    },
+    "0": {
+      "file": "0030.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038909912109375
+    },
+    "1": {
+      "file": "0031.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039033889770507812,
+      "maxPotentialError": 0.0039033889770507812
+    },
+    "2": {
+      "file": "0032.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0038852691650390625
+    },
+    "3": {
+      "file": "0033.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0039033889770507812
+    },
+    "4": {
+      "file": "0034.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038938522338867188
+    },
+    "5": {
+      "file": "0035.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038976669311523438
+    },
+    "6": {
+      "file": "0036.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0039033889770507812
+    },
+    "7": {
+      "file": "0037.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039005279541015625
+    },
+    "8": {
+      "file": "0038.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.00390625,
+      "maxPotentialError": 0.0039014816284179688
+    },
+    "9": {
+      "file": "0039.bin",
+      "bytes": 223264,
+      "maxGradientError": 0.0039052963256835938,
+      "maxPotentialError": 0.0038814544677734375
+    }
+  }
+}

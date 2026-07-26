@@ -212,6 +212,12 @@ body.light #controls{ color-scheme: light; }
     details .inner{ padding:12px; background:#121723; }
     body.light details .inner{ background:#fbfdff; }
     .legend{ color: var(--muted); font-size: 13px; }
+    .alternative-version-link{
+      color: var(--accent);
+      font-weight:600;
+      text-decoration:none;
+    }
+    .alternative-version-link:hover{ text-decoration:underline; }
     .spaced{ letter-spacing: .01em; }
     .buttons-wrap{ display:flex; flex-wrap:wrap; gap:6px; }
     .subheader{ font-weight:600; color:var(--text); margin:8px 0 6px; }
@@ -406,6 +412,10 @@ body.light #controls{ color-scheme: light; }
         <div id="inserted-list" class="inserted-list"></div>
         <button type="button" id="add-inserted-btn">+ Add particle</button>
       </div>
+    </div>
+
+    <div class="section">
+      <a class="alternative-version-link" href="shape.html">Alternative version with more shapes</a>
     </div>
   </div>
 </div>
